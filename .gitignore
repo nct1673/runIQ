@@ -1,0 +1,89 @@
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor and IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+build/
+out/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.python-version
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+
+# JavaScript and TypeScript tooling
+.next/
+.nuxt/
+.svelte-kit/
+.vite/
+.turbo/
+.parcel-cache/
+
+# Package manager caches
+.npm/
+.yarn/
+.pnpm-store/
+
+# Test and cache artifacts
+.cache/
+.tmp/
+tmp/
+temp/
+
+# Local database files
+*.sqlite
+*.sqlite3
+*.db
+
+# Generated archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# Project data (never commit real activity history)
+/data
+
+# Next.js frontend build output
+frontend/.next/
+frontend/next-env.d.ts
+*.tsbuildinfo
+
+# Playwright MCP test artifacts
+.playwright-mcp/
+
