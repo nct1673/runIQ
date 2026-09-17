@@ -7,7 +7,7 @@ rewrite -- every other table already has a `user_id` FK from day one.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -19,4 +19,10 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String, unique=True)
     password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # Bumped on password change so every previously-issued session cookie
+    # (this device's stale copies, a leaked cookie, another browser)
+    # stops being accepted -- see get_current_user in user_service.py.
+    session_version: Mapped[int] = mapped_column(Integer, default=1)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

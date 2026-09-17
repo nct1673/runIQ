@@ -24,7 +24,12 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     if payload.email != user.email or not verify_password(user, payload.password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
+    # Clear first, not just overwrite -- don't let any pre-login session
+    # state (or a fixated cookie set before authentication) carry over
+    # into the authenticated session.
+    request.session.clear()
     request.session["user_id"] = str(user.id)
+    request.session["session_version"] = user.session_version
     return user
 
 
@@ -42,6 +47,7 @@ def me(user=Depends(get_current_user)) -> UserOut:
 @router.post("/change-password")
 def change_password(
     payload: ChangePasswordRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict[str, str]:
@@ -49,4 +55,8 @@ def change_password(
         raise HTTPException(status_code=401, detail="Current password is incorrect")
 
     set_password(db, user, payload.new_password)
+    # set_password bumped session_version, invalidating every issued
+    # cookie including this one -- re-sync this request's session so the
+    # session making the change stays logged in.
+    request.session["session_version"] = user.session_version
     return {"status": "ok"}
