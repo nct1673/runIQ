@@ -51,6 +51,14 @@ def verify_password(user: User, password: str) -> bool:
     return bcrypt.checkpw(password.encode(), user.password_hash.encode())
 
 
+def set_password(db: Session, user: User, new_password: str) -> None:
+    """Used by POST /api/auth/change-password. Note: this is the only
+    way to change the password after bootstrap -- editing AUTH_PASSWORD
+    in .env again does nothing once password_hash is already set."""
+    user.password_hash = _hash_password(new_password)
+    db.commit()
+
+
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     """FastAPI dependency: 401s unless `request.session` holds a valid
     `user_id` (set by POST /api/auth/login)."""

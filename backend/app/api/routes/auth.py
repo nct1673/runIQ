@@ -6,8 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.schemas.auth import LoginRequest, UserOut
-from app.services.user_service import get_current_user, get_or_create_default_user, verify_password
+from app.models.user import User
+from app.schemas.auth import ChangePasswordRequest, LoginRequest, UserOut
+from app.services.user_service import (
+    get_current_user,
+    get_or_create_default_user,
+    set_password,
+    verify_password,
+)
 
 router = APIRouter()
 
@@ -31,3 +37,16 @@ def logout(request: Request) -> dict[str, str]:
 @router.get("/me", response_model=UserOut)
 def me(user=Depends(get_current_user)) -> UserOut:
     return user
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    if not verify_password(user, payload.current_password):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    set_password(db, user, payload.new_password)
+    return {"status": "ok"}

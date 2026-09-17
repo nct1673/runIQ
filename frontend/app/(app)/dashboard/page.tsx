@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
 import Card, { EmptyPlaceholder } from "@/components/Card";
 import Header, { HeaderIconButton } from "@/components/Header";
 import {
@@ -21,9 +25,21 @@ import StatCard from "@/components/StatCard";
  * training_load_service.py and goal_service.py are all still stubs.
  */
 export default function DashboardPage() {
+  const [displayName, setDisplayName] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/profile/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((profile) => setDisplayName(profile?.display_name || null))
+      .catch(() => setDisplayName(null));
+  }, []);
+
   return (
     <div>
-      <Header title="Welcome, Runner" subtitle="Here's what's happening with your training.">
+      <Header
+        title={`Welcome, ${displayName || "Runner"}`}
+        subtitle="Here's what's happening with your training."
+      >
         <button
           type="button"
           className="flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm text-text"

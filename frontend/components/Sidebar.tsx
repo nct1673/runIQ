@@ -12,8 +12,8 @@ import {
   HomeIcon,
   LogoutIcon,
   RefreshIcon,
-  SettingsIcon,
   TrendingUpIcon,
+  UserIcon,
 } from "@/components/icons";
 
 const NAV_ITEMS: { href: string; label: string; icon: ComponentType<{ className?: string }> }[] = [
@@ -24,6 +24,7 @@ const NAV_ITEMS: { href: string; label: string; icon: ComponentType<{ className?
   { href: "/predictions", label: "Predictions", icon: TrendingUpIcon },
   { href: "/goals", label: "Goals", icon: CalendarIcon },
   { href: "/coach", label: "Coach", icon: ChatIcon },
+  { href: "/profile", label: "Profile", icon: UserIcon },
 ];
 
 export default function Sidebar() {
@@ -79,13 +80,6 @@ export default function Sidebar() {
           className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted hover:text-text"
         >
           <LogoutIcon className="h-5 w-5" />
-        </button>
-        <button
-          type="button"
-          aria-label="Settings"
-          className="flex h-10 w-10 items-center justify-center rounded-full text-text-muted hover:bg-surface-hover hover:text-text"
-        >
-          <SettingsIcon className="h-5 w-5" />
         </button>
       </div>
     </aside>

@@ -11,6 +11,7 @@ from app.models.insight import Insight
 from app.models.prediction import Prediction
 from app.models.training_load import TrainingLoad
 from app.models.user import User
+from app.models.user_profile import UserProfile
 from app.models.weather import WeatherCondition
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "Prediction",
     "TrainingLoad",
     "User",
+    "UserProfile",
     "WeatherCondition",
 ]

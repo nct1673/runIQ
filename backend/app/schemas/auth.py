@@ -1,7 +1,7 @@
 """Pydantic schemas for the login module."""
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
@@ -14,3 +14,8 @@ class UserOut(BaseModel):
     email: str
 
     model_config = {"from_attributes": True}
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
