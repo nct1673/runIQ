@@ -16,3 +16,4 @@ python-dotenv>=1.0
 pgvector>=0.2
 anthropic>=0.28
 garminconnect>=0.2.24
+bcrypt>=4.1

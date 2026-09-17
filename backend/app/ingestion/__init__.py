@@ -1,6 +1,8 @@
-"""CSV -> validated -> normalized activity data pipeline.
+"""Activity data ingestion.
 
-Kept independent of any HTTP/API concern so the same functions can later
-be called from a scheduled Strava-API sync job instead of the upload
-endpoint in `app.api.routes.activities`.
+`garmin_api_loader.py` is the bronze-layer source: pulls raw activity
+data straight from the Garmin Connect API into `activities_raw`, no
+parsing/filtering. `normalizer.py`/`validators.py`/`loader.py` are the
+raw-to-processed pipeline (targets `activities`) -- user-owned, in
+progress (see docs/ipynb/raw_process.ipynb).
 """

@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     garmin_email: str | None = None
     garmin_password: str | None = None
 
+    # Login module -- single-user access gate, not multi-user auth.
+    # Login identity is `default_user_email` above (one identity, not two) --
+    # only the password is new here.
+    #
+    # No default for session_secret_key: it signs the session cookie, so a
+    # hardcoded fallback would mean anyone who reads this (now-public) repo
+    # could forge a valid session if the real env var were ever unset --
+    # fail loudly at startup instead of silently running insecure.
+    session_secret_key: str
+    auth_password: str | None = None
+
     # AI Coach (Module 6)
     llm_provider: str = "anthropic"
     anthropic_api_key: str | None = None

@@ -19,17 +19,9 @@ class ActivityOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class UploadResult(BaseModel):
-    """Returned by POST /api/activities/upload -- raw-layer (activities_raw)
-    stats only. Uploading does not populate `activities`."""
-
-    raw_imported: int
-    raw_skipped_duplicates: int
-
-
 class GarminSyncResult(BaseModel):
     """Returned by POST /api/activities/sync-garmin -- raw-layer
-    (activities_raw) stats only, same contract as UploadResult."""
+    (activities_raw) stats only. Syncing does not populate `activities`."""
 
     imported: int
     skipped_duplicates: int

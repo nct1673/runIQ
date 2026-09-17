@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 
-import Sidebar from "@/components/Sidebar";
-
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -13,15 +11,12 @@ export const metadata: Metadata = {
   description: "Personal running intelligence platform",
 };
 
+/** Root layout -- deliberately minimal. The sidebar shell lives in
+ * app/(app)/layout.tsx so /login can render without it. */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className="font-sans">
-        <div className="flex min-h-screen bg-bg">
-          <Sidebar />
-          <main className="flex-1 overflow-y-auto p-6 lg:p-8">{children}</main>
-        </div>
-      </body>
+      <body className="font-sans">{children}</body>
     </html>
   );
 }
