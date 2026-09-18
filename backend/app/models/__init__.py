@@ -6,8 +6,10 @@ from app.models.activity import Activity
 from app.models.activity_metrics import ActivityMetrics
 from app.models.activity_raw import ActivityRaw
 from app.models.air_quality import AirQuality
+from app.models.conversation import Conversation
+from app.models.conversation_message import ConversationMessage
 from app.models.goal import Goal
-from app.models.insight import Insight
+from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.prediction import Prediction
 from app.models.training_load import TrainingLoad
 from app.models.user import User
@@ -19,8 +21,10 @@ __all__ = [
     "ActivityMetrics",
     "ActivityRaw",
     "AirQuality",
+    "Conversation",
+    "ConversationMessage",
     "Goal",
-    "Insight",
+    "KnowledgeChunk",
     "Prediction",
     "TrainingLoad",
     "User",

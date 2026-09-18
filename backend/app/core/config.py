@@ -42,9 +42,11 @@ class Settings(BaseSettings):
     session_secret_key: str
     auth_password: str | None = None
 
-    # AI Coach (Module 6)
-    llm_provider: str = "anthropic"
-    anthropic_api_key: str | None = None
+    # AI Coach (Module 6) -- Ollama, local/GPU-hosted, not a cloud API.
+    llm_provider: str = "ollama"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_chat_model: str = "qwen3:14b"
+    ollama_embed_model: str = "nomic-embed-text"
 
     # Frontend
     cors_origins: list[str] = ["http://localhost:3000"]
