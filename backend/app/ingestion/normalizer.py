@@ -1,79 +1,71 @@
-"""Normalize parsed activity rows: unit conversion, timestamp/duration/
-pace parsing, activity-type filtering, and dedup-key generation
-(blueprint §8 "Data Normalization").
+"""Normalize one raw Garmin-API activity row into the fields
+`app.models.Activity` expects (blueprint SS8 "Data Normalization").
 
-Only "Running" and "Treadmill Running" are running-intelligence relevant
-(project decision) -- everything else in a Garmin export (Hiking,
-Strength Training, Padel, ...) is filtered out here and reported back as
-skipped, never stored.
+Per-row, not DataFrame-batch: `app.ingestion.processor` calls this once
+per unprocessed `ActivityRaw`, so a bad/unusual row never risks
+misaligning a shared results list the way a single big pandas pass over
+the whole table could. Only "running" and "treadmill_running" are
+running-intelligence relevant (project decision) -- everything else is
+reported back as skipped, never stored.
 """
 from __future__ import annotations
 
-import hashlib
+from datetime import datetime
 
-import pandas as pd
+import pytz
 
-RUNNING_ACTIVITY_TYPES = {"Running", "Treadmill Running"}
+from app.models.activity_raw import ActivityRaw
+
+RUNNING_ACTIVITY_TYPES = {"running", "treadmill_running"}
+
+# Same assumption docs/ipynb/raw_process.ipynb's myt2unix made: every
+# api_start_time_local is a wall-clock reading in this timezone. True
+# while every run is logged from Malaysia; revisit if that ever changes
+# (there's no per-activity timezone field on ActivityRaw to fall back on).
+ACTIVITY_TIMEZONE = pytz.timezone("Asia/Kuala_Lumpur")
 
 
-def _parse_duration_to_seconds(value: str) -> float:
-    """"HH:MM:SS" -> seconds."""
-    hours, minutes, seconds = value.split(":")
-    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+def normalize_one(raw: ActivityRaw) -> dict | None:
+    """Returns a dict with keys matching `app.models.Activity`
+    (distance_km, duration_s, avg_pace_s_per_km, avg_hr, avg_cadence,
+    elevation_gain_m, activity_type, started_at, external_id), or None if
+    `raw` isn't a running activity and should be skipped.
 
+    Ported from docs/ipynb/raw_process.ipynb cells 1-5 and the "Finalize
+    Processing" column mapping, with one change: avg_pace_s_per_km is
+    computed directly (duration / (distance/1000)) instead of the
+    notebook's floor(mm)/floor(ss) round-trip, which only ever fed a
+    display string and threw away sub-second precision doing it.
 
-def _parse_pace_to_seconds_per_km(value) -> float | None:
-    """"M:SS" (minutes:seconds per km) -> seconds per km. Already NaN by
-    this point for activities where Garmin has no meaningful pace."""
-    if pd.isna(value):
+    `external_id`: `str(raw.garmin_activity_id)` -- already a real,
+    stable, unique ID from Garmin, no need for the hash-based scheme the
+    old CSV-era version of this file used.
+
+    `started_at` is localized to ACTIVITY_TIMEZONE (not left naive) so
+    `int(started_at.timestamp())` -- what processor.py passes to
+    weather_service.fetch_weather_snapshot -- is the correct Unix
+    timestamp for this activity's actual moment, regardless of what
+    timezone the server process itself happens to run in.
+    """
+    if raw.api_activity_type not in RUNNING_ACTIVITY_TYPES:
         return None
-    minutes, seconds = str(value).split(":")
-    return int(minutes) * 60 + float(seconds)
 
+    if raw.api_distance is None or raw.api_duration is None or not raw.api_start_time_local:
+        return None
 
-def _external_id(row: pd.Series) -> str:
-    """Deterministic dedup key. Garmin's bulk CSV export has no stable
-    activity-ID column, so we derive one from fields that together
-    uniquely identify a real activity -- re-uploading the same (or an
-    overlapping) export won't create duplicate rows.
-    """
-    key = (
-        f"{row['started_at'].isoformat()}|{row['distance_km']}|"
-        f"{row['duration_s']}|{row['activity_type']}"
+    started_at = ACTIVITY_TIMEZONE.localize(
+        datetime.strptime(raw.api_start_time_local, "%Y-%m-%d %H:%M:%S")
     )
-    return hashlib.sha1(key.encode()).hexdigest()
+    distance_km = raw.api_distance / 1000
 
-
-def normalize(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    """Returns (normalized_df, skipped_non_running_count).
-
-    `normalized_df` columns match `app.models.Activity` plus
-    `external_id`; rows are not yet validated -- see validators.py.
-    """
-    total = len(df)
-    df = df[df["activity_type"].isin(RUNNING_ACTIVITY_TYPES)].copy()
-    skipped_non_running = total - len(df)
-
-    df["started_at"] = pd.to_datetime(df["started_at"], errors="coerce")
-    df["distance_km"] = pd.to_numeric(df["distance_km"], errors="coerce")
-    df["duration_s"] = df["duration_str"].apply(
-        lambda v: _parse_duration_to_seconds(v) if pd.notna(v) else None
-    )
-    df["avg_pace_s_per_km"] = df["avg_pace_str"].apply(_parse_pace_to_seconds_per_km)
-    df["avg_hr"] = pd.to_numeric(df["avg_hr"], errors="coerce")
-    df["avg_cadence"] = pd.to_numeric(df["avg_cadence"], errors="coerce")
-    df["elevation_gain_m"] = pd.to_numeric(df["elevation_gain_m"], errors="coerce")
-    df["external_id"] = df.apply(_external_id, axis=1)
-
-    columns = [
-        "external_id",
-        "activity_type",
-        "started_at",
-        "distance_km",
-        "duration_s",
-        "avg_pace_s_per_km",
-        "avg_hr",
-        "avg_cadence",
-        "elevation_gain_m",
-    ]
-    return df[columns].reset_index(drop=True), skipped_non_running
+    return {
+        "external_id": str(raw.garmin_activity_id),
+        "started_at": started_at,
+        "distance_km": distance_km,
+        "duration_s": raw.api_duration,
+        "avg_pace_s_per_km": raw.api_duration / distance_km if distance_km else None,
+        "avg_hr": raw.api_average_hr,
+        "avg_cadence": raw.api_average_running_cadence,
+        "elevation_gain_m": raw.api_elevation_gain,
+        "activity_type": raw.api_activity_type,
+    }

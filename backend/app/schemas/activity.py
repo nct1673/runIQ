@@ -20,9 +20,20 @@ class ActivityOut(BaseModel):
 
 
 class GarminSyncResult(BaseModel):
-    """Returned by POST /api/activities/sync-garmin -- raw-layer
-    (activities_raw) stats only. Syncing does not populate `activities`."""
+    """Returned by POST /api/activities/sync-garmin. Covers both stages
+    that route now runs: the raw Garmin pull (activities_raw) and the
+    raw-to-processed pipeline (activities/weather_conditions) that runs
+    immediately after it -- see app.ingestion.processor.
+    """
 
+    # Stage 1: raw pull (garmin_api_loader)
+    fetched: int
     imported: int
     skipped_duplicates: int
-    fetched: int
+
+    # Stage 2: raw-to-processed pipeline (processor.process_new_activities)
+    processed: int
+    skipped_non_running: int
+    weather_matched: int
+    rejected: int
+    rejection_reasons: list[str]

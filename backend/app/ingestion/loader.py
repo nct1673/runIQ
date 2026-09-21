@@ -1,72 +1,67 @@
-"""Load validated, normalized activity rows into Postgres, skipping any
-that already exist (matched by `external_id`) for this user.
-
-Deliberately separate from validators.py/normalizer.py: this is the only
-module in `app.ingestion` that touches the database.
+"""Insert one validated, normalized+weather-enriched activity into
+Postgres -- `activities` plus, when weather was matched, the linked
+`weather_conditions` row. Per-row (see normalizer.py/processor.py);
+deliberately the only module in `app.ingestion` that touches the
+database.
 """
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
 
-import pandas as pd
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.activity import Activity
+from app.models.weather import WeatherCondition
+
+WEATHER_FIELDS = {"temperature_c", "feels_like_c", "humidity_pct", "wind_speed_kmh", "precipitation_mm", "condition"}
 
 
-@dataclass
-class LoadResult:
-    imported: int
-    skipped_duplicates: int
-    imported_ids: list[str] = field(default_factory=list)
-
-
-def load(db: Session, user_id: uuid.UUID, df: pd.DataFrame) -> LoadResult:
-    """Insert `df` (as produced by normalizer.normalize + validators.validate)
-    for `user_id`, skipping rows whose `external_id` already exists for
-    that user. Commits on success.
+def load_one(db: Session, user_id: uuid.UUID, fields: dict) -> Activity:
+    """`fields` is normalizer.normalize_one's output merged with
+    weather_service.fetch_weather_snapshot's output (already validated by
+    validators.validate_one). Does not commit -- the caller (processor.py)
+    commits once per batch so a mid-run failure doesn't leave a half
+    -committed activity without its weather row.
     """
-    if df.empty:
-        return LoadResult(imported=0, skipped_duplicates=0)
+    # started_at arrives timezone-aware (normalizer.py localizes it, so
+    # processor.py can derive a correct Unix timestamp for the weather
+    # lookup) -- but Activity.started_at is a plain DateTime column with
+    # no timezone awareness of its own, so passing a tz-aware value
+    # through as-is gets silently converted to UTC on the way into
+    # Postgres, corrupting the wall-clock time (and sometimes the
+    # calendar date) it's supposed to represent. Store the naive local
+    # wall-clock value instead, matching Garmin's own display.
+    started_at = fields["started_at"]
+    if started_at.tzinfo is not None:
+        started_at = started_at.replace(tzinfo=None)
 
-    existing_ids = set(
-        db.scalars(
-            select(Activity.external_id).where(
-                Activity.user_id == user_id,
-                Activity.external_id.in_(df["external_id"].tolist()),
+    activity = Activity(
+        user_id=user_id,
+        source="garmin_api",
+        external_id=fields["external_id"],
+        started_at=started_at,
+        distance_km=fields["distance_km"],
+        duration_s=fields["duration_s"],
+        avg_pace_s_per_km=fields.get("avg_pace_s_per_km"),
+        avg_hr=fields.get("avg_hr"),
+        avg_cadence=fields.get("avg_cadence"),
+        elevation_gain_m=fields.get("elevation_gain_m"),
+        activity_type=fields.get("activity_type"),
+    )
+    db.add(activity)
+    db.flush()  # populate activity.id before it's used as a FK below
+
+    if any(fields.get(k) is not None for k in WEATHER_FIELDS):
+        db.add(
+            WeatherCondition(
+                activity_id=activity.id,
+                temperature_c=fields.get("temperature_c"),
+                feels_like_c=fields.get("feels_like_c"),
+                humidity_pct=fields.get("humidity_pct"),
+                wind_speed_kmh=fields.get("wind_speed_kmh"),
+                precipitation_mm=fields.get("precipitation_mm"),
+                condition=fields.get("condition"),
             )
         )
-    )
 
-    new_rows = df[~df["external_id"].isin(existing_ids)]
-    skipped_duplicates = len(df) - len(new_rows)
-
-    objects = [
-        Activity(
-            user_id=user_id,
-            source="garmin_csv_upload",
-            external_id=row["external_id"],
-            started_at=row["started_at"],
-            distance_km=row["distance_km"],
-            duration_s=row["duration_s"],
-            avg_pace_s_per_km=row["avg_pace_s_per_km"],
-            avg_hr=row["avg_hr"],
-            avg_cadence=row["avg_cadence"],
-            elevation_gain_m=row["elevation_gain_m"],
-            activity_type=row["activity_type"],
-        )
-        for _, row in new_rows.iterrows()
-    ]
-
-    db.add_all(objects)
-    db.flush()  # populate each object's client-side UUID default before we read .id
-    imported_ids = [str(obj.id) for obj in objects]
-    db.commit()
-
-    return LoadResult(
-        imported=len(objects),
-        skipped_duplicates=skipped_duplicates,
-        imported_ids=imported_ids,
-    )
+    return activity
