@@ -1,24 +1,21 @@
 """Activity endpoints.
 
-Two raw-only data-collection paths, both writing exclusively to the
-bronze layer (`activities_raw`) -- neither runs any
-parsing/normalization/validation into `activities`. That
-raw-to-processed transformation is separate, user-owned pipeline work,
-not something these endpoints trigger automatically.
-
-- `POST /upload`: manual CSV export, via `app.ingestion.raw_loader`.
-- `POST /sync-garmin`: live Garmin Connect API pull, via
-  `app.ingestion.garmin_api_loader`.
+`POST /sync-garmin` runs the full pipeline in one request: pulls
+activities from the Garmin Connect API into the bronze layer
+(`activities_raw`) via `app.ingestion.garmin_api_loader`, then
+immediately runs the raw-to-processed pipeline
+(`app.ingestion.processor`) so `activities`/`weather_conditions` are
+populated in the same "Update Data" press -- no separate manual step.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.db import get_db
-from app.ingestion import garmin_api_loader, raw_loader
+from app.ingestion import garmin_api_loader, processor
 from app.models.activity import Activity
-from app.schemas.activity import ActivityOut, GarminSyncResult, UploadResult
+from app.schemas.activity import ActivityOut, GarminSyncResult
 from app.services.user_service import get_or_create_default_user
 
 router = APIRouter()
@@ -34,30 +31,14 @@ def list_activities(db: Session = Depends(get_db)) -> list[ActivityOut]:
     ).all()
 
 
-@router.post("/upload", response_model=UploadResult)
-async def upload_activities(file: UploadFile, db: Session = Depends(get_db)) -> UploadResult:
-    """Manual CSV import: stores every original column of every row into
-    `activities_raw` (raw_loader.parse_raw -> raw_loader.load),
-    deduplicated against rows already imported for this user. Nothing
-    else happens here.
-    """
-    csv_bytes = await file.read()
-    user = get_or_create_default_user(db)
-
-    raw_full_df = raw_loader.parse_raw(csv_bytes)
-    raw_result = raw_loader.load(db, user.id, raw_full_df, file.filename)
-
-    return UploadResult(
-        raw_imported=raw_result.imported,
-        raw_skipped_duplicates=raw_result.skipped_duplicates,
-    )
-
-
 @router.post("/sync-garmin", response_model=GarminSyncResult)
 def sync_garmin(db: Session = Depends(get_db)) -> GarminSyncResult:
-    """Pull recent activities directly from the Garmin Connect API and
-    store them in `activities_raw` (source="garmin_api"), deduplicated
-    by Garmin's own activity ID. Nothing else happens here.
+    """Pull recent activities from the Garmin Connect API into
+    `activities_raw` (source="garmin_api", deduplicated by Garmin's own
+    activity ID), then immediately run the raw-to-processed pipeline so
+    `activities`/`weather_conditions` are populated too -- see
+    app.ingestion.processor. A sync with no new Garmin activities skips
+    the second stage's work entirely (nothing new to process).
     """
     settings = get_settings()
     if not settings.garmin_email or not settings.garmin_password:
@@ -66,15 +47,22 @@ def sync_garmin(db: Session = Depends(get_db)) -> GarminSyncResult:
     user = get_or_create_default_user(db)
 
     try:
-        activities = garmin_api_loader.fetch_activities(
-            settings.garmin_email, settings.garmin_password
+        activities = garmin_api_loader.fetch_new_activities(
+            db, user.id, settings.garmin_email, settings.garmin_password
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Garmin login/fetch failed: {exc}") from exc
 
-    result = garmin_api_loader.load(db, user.id, activities)
+    raw_result = garmin_api_loader.load(db, user.id, activities)
+    process_result = processor.process_new_activities(db, user.id)
+
     return GarminSyncResult(
-        imported=result.imported,
-        skipped_duplicates=result.skipped_duplicates,
-        fetched=result.fetched,
+        fetched=raw_result.fetched,
+        imported=raw_result.imported,
+        skipped_duplicates=raw_result.skipped_duplicates,
+        processed=process_result.processed,
+        skipped_non_running=process_result.skipped_non_running,
+        weather_matched=process_result.weather_matched,
+        rejected=process_result.rejected,
+        rejection_reasons=process_result.rejection_reasons,
     )

@@ -1,83 +1,24 @@
 """Raw landing-zone table for imported activity data (bronze layer).
 
-Two independent raw sources land here, distinguished by `source`:
+Sourced entirely from the Garmin Connect API
+(`garminconnect.Garmin.get_activities()`, see
+`app/ingestion/garmin_api_loader.py`) -- one column per API field, typed
+to match the API's own JSON types (Float measurements, Integer
+counts/ids, String text, Boolean flags). Dedup key: `garmin_activity_id`,
+Garmin's own real unique ID.
 
-- ``"csv_upload"``: one column per Garmin CSV export header (see
-  `RAW_COLUMN_MAP`), everything `String` since the CSV source itself is
-  all-text. Dedup key: `row_hash`.
-- ``"garmin_api"``: one column per `garminconnect.Garmin.get_activities()`
-  field, typed to match the API's own JSON types (Float measurements,
-  Integer counts/ids, String text, Boolean flags) -- storing them typed
-  is fidelity to the source, not processing. Dedup key: Garmin's own
-  `garmin_activity_id`, a real unique ID (unlike the CSV path's
-  synthetic hash).
-
-Columns exclusive to one source are simply NULL for rows from the other.
-Populating/linking either half to `activities` is ingestion-pipeline
-work, intentionally left unimplemented here.
+A manual CSV-upload source existed earlier in the project but was
+retired once the Garmin API sync replaced it as the only import method
+-- see git history for `raw_loader.py`/`csv_parser.py` if that's ever
+wanted again.
 """
 import uuid
 from datetime import datetime
 
-from sqlalchemy import (
-    BigInteger,
-    Boolean,
-    DateTime,
-    Float,
-    ForeignKey,
-    Integer,
-    String,
-    UniqueConstraint,
-)
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
-
-# --- csv_upload source -------------------------------------------------
-
-# Original Garmin CSV header -> ActivityRaw column name.
-RAW_COLUMN_MAP: dict[str, str] = {
-    "Activity Type": "activity_type",
-    "Date": "date",
-    "Favorite": "favorite",
-    "Title": "title",
-    "Distance": "distance",
-    "Calories": "calories",
-    "Time": "time",
-    "Avg HR": "avg_hr",
-    "Max HR": "max_hr",
-    "Aerobic TE": "aerobic_te",
-    "Avg Run Cadence": "avg_run_cadence",
-    "Max Run Cadence": "max_run_cadence",
-    "Avg Pace": "avg_pace",
-    "Best Pace": "best_pace",
-    "Total Ascent": "total_ascent",
-    "Total Descent": "total_descent",
-    "Avg Stride Length": "avg_stride_length",
-    "Avg Vertical Ratio": "avg_vertical_ratio",
-    "Avg Vertical Oscillation": "avg_vertical_oscillation",
-    "Avg Ground Contact Time": "avg_ground_contact_time",
-    "Avg GAP": "avg_gap",
-    "Normalized Power® (NP®)": "normalized_power_np",
-    "Training Stress Score®": "training_stress_score",
-    "Avg Power": "avg_power",
-    "Max Power": "max_power",
-    "Steps": "steps",
-    "Total Reps": "total_reps",
-    "Total Sets": "total_sets",
-    "Body Battery Drain": "body_battery_drain",
-    "Min Temp": "min_temp",
-    "Decompression": "decompression",
-    "Best Lap Time": "best_lap_time",
-    "Number of Laps": "number_of_laps",
-    "Max Temp": "max_temp",
-    "Moving Time": "moving_time",
-    "Elapsed Time": "elapsed_time",
-    "Min Elevation": "min_elevation",
-    "Max Elevation": "max_elevation",
-}
-
-# --- garmin_api source ---------------------------------------------------
 
 # garminconnect activity-summary field -> ActivityRaw column name.
 # Nested fields (activityType.typeKey, eventType.typeKey) are accessed
@@ -149,7 +90,6 @@ API_COLUMN_MAP: dict[str, str] = {
 class ActivityRaw(Base):
     __tablename__ = "activities_raw"
     __table_args__ = (
-        UniqueConstraint("user_id", "row_hash", name="uq_activities_raw_user_row_hash"),
         UniqueConstraint(
             "user_id", "garmin_activity_id", name="uq_activities_raw_user_garmin_activity_id"
         ),
@@ -158,53 +98,9 @@ class ActivityRaw(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
 
-    source: Mapped[str] = mapped_column(String, default="csv_upload")
-    source_file: Mapped[str | None] = mapped_column(String, nullable=True)
+    source: Mapped[str] = mapped_column(String, default="garmin_api")
     imported_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    # -- csv_upload columns (dedup key: row_hash) --
-    row_hash: Mapped[str | None] = mapped_column(String, nullable=True)
-
-    activity_type: Mapped[str | None] = mapped_column(String, nullable=True)
-    date: Mapped[str | None] = mapped_column(String, nullable=True)
-    favorite: Mapped[str | None] = mapped_column(String, nullable=True)
-    title: Mapped[str | None] = mapped_column(String, nullable=True)
-    distance: Mapped[str | None] = mapped_column(String, nullable=True)
-    calories: Mapped[str | None] = mapped_column(String, nullable=True)
-    time: Mapped[str | None] = mapped_column(String, nullable=True)
-    avg_hr: Mapped[str | None] = mapped_column(String, nullable=True)
-    max_hr: Mapped[str | None] = mapped_column(String, nullable=True)
-    aerobic_te: Mapped[str | None] = mapped_column(String, nullable=True)
-    avg_run_cadence: Mapped[str | None] = mapped_column(String, nullable=True)
-    max_run_cadence: Mapped[str | None] = mapped_column(String, nullable=True)
-    avg_pace: Mapped[str | None] = mapped_column(String, nullable=True)
-    best_pace: Mapped[str | None] = mapped_column(String, nullable=True)
-    total_ascent: Mapped[str | None] = mapped_column(String, nullable=True)
-    total_descent: Mapped[str | None] = mapped_column(String, nullable=True)
-    avg_stride_length: Mapped[str | None] = mapped_column(String, nullable=True)
-    avg_vertical_ratio: Mapped[str | None] = mapped_column(String, nullable=True)
-    avg_vertical_oscillation: Mapped[str | None] = mapped_column(String, nullable=True)
-    avg_ground_contact_time: Mapped[str | None] = mapped_column(String, nullable=True)
-    avg_gap: Mapped[str | None] = mapped_column(String, nullable=True)
-    normalized_power_np: Mapped[str | None] = mapped_column(String, nullable=True)
-    training_stress_score: Mapped[str | None] = mapped_column(String, nullable=True)
-    avg_power: Mapped[str | None] = mapped_column(String, nullable=True)
-    max_power: Mapped[str | None] = mapped_column(String, nullable=True)
-    steps: Mapped[str | None] = mapped_column(String, nullable=True)
-    total_reps: Mapped[str | None] = mapped_column(String, nullable=True)
-    total_sets: Mapped[str | None] = mapped_column(String, nullable=True)
-    body_battery_drain: Mapped[str | None] = mapped_column(String, nullable=True)
-    min_temp: Mapped[str | None] = mapped_column(String, nullable=True)
-    decompression: Mapped[str | None] = mapped_column(String, nullable=True)
-    best_lap_time: Mapped[str | None] = mapped_column(String, nullable=True)
-    number_of_laps: Mapped[str | None] = mapped_column(String, nullable=True)
-    max_temp: Mapped[str | None] = mapped_column(String, nullable=True)
-    moving_time: Mapped[str | None] = mapped_column(String, nullable=True)
-    elapsed_time: Mapped[str | None] = mapped_column(String, nullable=True)
-    min_elevation: Mapped[str | None] = mapped_column(String, nullable=True)
-    max_elevation: Mapped[str | None] = mapped_column(String, nullable=True)
-
-    # -- garmin_api columns (dedup key: garmin_activity_id) --
     garmin_activity_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     api_activity_name: Mapped[str | None] = mapped_column(String, nullable=True)

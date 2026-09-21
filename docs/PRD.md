@@ -7,7 +7,7 @@ anything not captured here.
 ## Vision
 
 A personalized running-intelligence platform that combines historical
-Garmin activity data, weather, and air quality with ML and an LLM-based
+Garmin activity data and weather with ML and an LLM-based
 coach to answer: **"How am I performing, why is my performance changing,
 and what should I do next?"** It does not replace Strava/Garmin as an
 activity tracker — it adds personalized intelligence and decision support

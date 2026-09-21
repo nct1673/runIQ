@@ -1,4 +1,4 @@
-"""Weather/AQ intelligence endpoints (blueprint SS14-17)."""
+"""Weather intelligence endpoints (blueprint SS14-16)."""
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 

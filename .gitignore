@@ -79,6 +79,10 @@ temp/
 # Project data (never commit real activity history)
 /data
 
+# User's own pipeline notebook -- experimented with real API keys inline,
+# leaked in 45805e0/cc17641; keep local-only from here on (see history purge)
+/docs/ipynb
+
 # Next.js frontend build output
 frontend/.next/
 frontend/next-env.d.ts

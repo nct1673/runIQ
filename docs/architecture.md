@@ -14,7 +14,7 @@ app.ingestion (csv_parser → validators → normalizer)
         ▼
 PostgreSQL: activities, activity_metrics
         │
-        ├──▶ Weather/AQ services (OpenWeather, Google AQ) ─▶ weather_conditions, air_quality
+        ├──▶ Weather services (OpenWeather) ─▶ weather_conditions
         │
         ▼
 Analytics / Baseline / Similar-run / Training-load services
@@ -52,7 +52,7 @@ would be tomorrow's second caller of the exact same functions.
 |---|---|
 | 1. Data Platform | `app/ingestion/`, `app/api/routes/activities.py` |
 | 2. Running Analytics | `app/services/analytics_service.py`, `baseline_service.py`, `similar_run_service.py` |
-| — Weather/AQ Intelligence | `app/services/weather_service.py`, `air_quality_service.py` |
+| — Weather Intelligence | `app/services/weather_service.py` |
 | 3. Training Intelligence | `app/services/training_load_service.py` |
 | 4. Performance Prediction | `app/ml/`, `app/services/prediction_service.py` |
 | 5. Goals | `app/services/goal_service.py` |

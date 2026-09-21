@@ -7,11 +7,13 @@ import Header from "@/components/Header";
 import { RefreshIcon } from "@/components/icons";
 
 /**
- * Data-collection path: pulls directly from the Garmin Connect API
- * (via python-garminconnect, server-side) and stores every activity in
- * `activities_raw` (source="garmin_api"), deduplicated by Garmin's own
- * activity ID. No parsing/normalization happens here -- see
- * backend/app/ingestion/garmin_api_loader.py.
+ * Data-collection + processing path, both in one press: pulls from the
+ * Garmin Connect API into `activities_raw` (source="garmin_api",
+ * deduplicated by Garmin's own activity ID), then runs the
+ * raw-to-processed pipeline (normalize/weather/validate/load) so
+ * `activities`/`weather_conditions` are populated too -- see
+ * backend/app/ingestion/garmin_api_loader.py and
+ * backend/app/ingestion/processor.py.
  *
  * The manual CSV-upload path (POST /api/activities/upload) still exists
  * server-side but isn't linked from this page anymore.
@@ -30,7 +32,9 @@ export default function UpdateDataPage() {
       const result = await res.json();
       setStatus(
         `Fetched ${result.fetched}: ${result.imported} new row(s) stored, ` +
-          `${result.skipped_duplicates} duplicate(s) skipped.`
+          `${result.skipped_duplicates} duplicate(s) skipped. ` +
+          `Processed ${result.processed} into activities ` +
+          `(${result.weather_matched} with weather, ${result.rejected} rejected).`
       );
     } catch (err) {
       setStatus(`Update failed: ${(err as Error).message}`);

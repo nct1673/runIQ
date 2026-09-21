@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ComponentType } from "react";
 
 import {
@@ -10,8 +10,8 @@ import {
   CalendarIcon,
   ChatIcon,
   HomeIcon,
+  LogoutIcon,
   RefreshIcon,
-  SettingsIcon,
   TrendingUpIcon,
   UserIcon,
 } from "@/components/icons";
@@ -24,10 +24,17 @@ const NAV_ITEMS: { href: string; label: string; icon: ComponentType<{ className?
   { href: "/predictions", label: "Predictions", icon: TrendingUpIcon },
   { href: "/goals", label: "Goals", icon: CalendarIcon },
   { href: "/coach", label: "Coach", icon: ChatIcon },
+  { href: "/profile", label: "Profile", icon: UserIcon },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  }
 
   return (
     <aside className="flex h-screen w-[76px] shrink-0 flex-col items-center justify-between border-r border-border bg-surface/60 py-5">
@@ -67,17 +74,12 @@ export default function Sidebar() {
       <div className="flex flex-col items-center gap-3">
         <button
           type="button"
-          aria-label="Account"
+          aria-label="Log out"
+          title="Log out"
+          onClick={handleLogout}
           className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-muted hover:text-text"
         >
-          <UserIcon className="h-5 w-5" />
-        </button>
-        <button
-          type="button"
-          aria-label="Settings"
-          className="flex h-10 w-10 items-center justify-center rounded-full text-text-muted hover:bg-surface-hover hover:text-text"
-        >
-          <SettingsIcon className="h-5 w-5" />
+          <LogoutIcon className="h-5 w-5" />
         </button>
       </div>
     </aside>

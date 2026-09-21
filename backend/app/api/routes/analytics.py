@@ -6,14 +6,18 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.schemas.analytics import SummaryOut
+from app.services import analytics_service
+from app.services.user_service import get_or_create_default_user
 
 router = APIRouter()
 
 
-@router.get("/summary")
-def get_summary(db: Session = Depends(get_db)) -> dict:
-    """Total distance/runs/duration/avg pace etc. -- blueprint SS10.1."""
-    raise NotImplementedError("Phase 3: app.services.analytics_service.get_summary")
+@router.get("/summary", response_model=SummaryOut)
+def get_summary(db: Session = Depends(get_db)) -> SummaryOut:
+    """Total distance/runs/duration -- blueprint SS10.1."""
+    user = get_or_create_default_user(db)
+    return analytics_service.get_summary(db, user.id)
 
 
 @router.get("/baseline")

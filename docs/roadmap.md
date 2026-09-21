@@ -15,14 +15,14 @@ Implement `app/ingestion/` against the real Garmin CSV headers, the
 into Postgres. **Done when:** the real export can be reproducibly
 processed via one pipeline call.
 
-## Phase 2 — Weather & AQ Integration (1 week)
-OpenWeather + Google Air Quality clients, matched to activity
-timestamp/location, cached as snapshots. **Done when:** every eligible
-activity has associated environmental data.
+## Phase 2 — Weather Integration (1 week)
+OpenWeather client, matched to activity timestamp/location, cached as
+snapshots. **Done when:** every eligible activity has associated weather
+data.
 
 ## Phase 3 — Analytics Engine (1-1.5 weeks)
 Basic stats, trends, personal baseline, training volume/frequency,
-similar-run engine, weather/AQI impact analysis. **Done when:** a reusable
+similar-run engine, weather impact analysis. **Done when:** a reusable
 analytics layer exists independent of the UI.
 
 ## Phase 4 — ML Intelligence (2 weeks)

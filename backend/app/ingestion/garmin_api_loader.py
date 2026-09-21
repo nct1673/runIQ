@@ -1,9 +1,21 @@
 """Load activity data straight from the Garmin Connect API into
-`activities_raw` (bronze layer), independent of the CSV-upload path in
-raw_loader.py -- pure raw insert, no filtering/unit-conversion/validation.
+`activities_raw` (bronze layer) -- pure raw insert, no
+filtering/unit-conversion/validation.
 
-Dedup key here is Garmin's own `activityId` (a real unique ID), unlike
-the CSV path's synthetic row hash.
+Dedup key: Garmin's own `activityId`, a real unique ID.
+
+Fetch strategy: ID-based early stop, not a full re-fetch every time.
+`get_activities()` returns activities newest-first, so as soon as a page
+contains an activityId we've already stored, everything on later pages
+is guaranteed to be older and already synced too -- pagination stops
+right there instead of pulling (and then discarding) the whole window
+every run. This trades a small blind spot for far fewer API calls: a
+historical activity manually backfilled into Garmin *after* a sync that
+already passed its date range won't be picked up, since we stop before
+reaching that far back once we've hit newer, already-known activities.
+A periodic full sync (raise `limit` past your total activity count, with
+no early stop) is the standard way to catch that -- not implemented here,
+since it's an occasional maintenance operation, not the everyday path.
 """
 from __future__ import annotations
 
@@ -20,10 +32,26 @@ TOKEN_STORE = "~/.garminconnect"
 PAGE_SIZE = 50
 
 
-def fetch_activities(email: str, password: str, limit: int = 300) -> list[dict]:
+def _existing_activity_ids(db: Session, user_id: uuid.UUID) -> set[int]:
+    """Every garmin_activity_id already stored for this user."""
+    return set(
+        db.scalars(
+            select(ActivityRaw.garmin_activity_id).where(
+                ActivityRaw.user_id == user_id,
+                ActivityRaw.garmin_activity_id.isnot(None),
+            )
+        )
+    )
+
+
+def fetch_new_activities(
+    db: Session, user_id: uuid.UUID, email: str, password: str, limit: int = 300
+) -> list[dict]:
     """Log into Garmin Connect (reusing the cached token at TOKEN_STORE
-    when valid, otherwise a fresh email/password login) and return up to
-    `limit` activity summaries, most recent first.
+    when valid, otherwise a fresh email/password login) and return only
+    activities not already stored for this user, most recent first --
+    stopping pagination as soon as a page reaches an already-known
+    activityId (see module docstring for the early-stop rationale).
     """
     client = Garmin(email, password)
     try:
@@ -31,15 +59,27 @@ def fetch_activities(email: str, password: str, limit: int = 300) -> list[dict]:
     except Exception:
         client.login()
 
-    activities: list[dict] = []
+    existing_ids = _existing_activity_ids(db, user_id)
+
+    new_activities: list[dict] = []
     offset = 0
-    while len(activities) < limit:
+    while len(new_activities) < limit:
         batch = client.get_activities(offset, PAGE_SIZE)
         if not batch:
             break
-        activities.extend(batch)
+
+        reached_known = False
+        for act in batch:
+            if act["activityId"] in existing_ids:
+                reached_known = True
+                break
+            new_activities.append(act)
+
+        if reached_known:
+            break
         offset += PAGE_SIZE
-    return activities[:limit]
+
+    return new_activities[:limit]
 
 
 def remove_duplicates(
@@ -47,7 +87,9 @@ def remove_duplicates(
 ) -> tuple[list[dict], int]:
     """Split `activities` into (new_activities, skipped_duplicate_count)
     by checking each activityId against what's already stored for this
-    user.
+    user. Kept as a safety net at insert time (e.g. a concurrent sync, or
+    a caller that didn't go through `fetch_new_activities`) -- early stop
+    optimizes *fetching*, this guarantees correctness of the *insert*.
     """
     ids = [a["activityId"] for a in activities]
     existing_ids = set(

@@ -23,17 +23,29 @@ class Settings(BaseSettings):
     # Single-user system (blueprint §4) -- every write attaches to this user.
     default_user_email: str = "owner@runiq.local"
 
-    # External APIs (Module 1/2 -- Data Platform, Weather/AQ Intelligence)
+    # External APIs (Module 1/2 -- Data Platform, Weather Intelligence)
     openweather_api_key: str | None = None
-    google_air_quality_api_key: str | None = None
 
     # Garmin Connect (unofficial API via python-garminconnect)
     garmin_email: str | None = None
     garmin_password: str | None = None
 
-    # AI Coach (Module 6)
-    llm_provider: str = "anthropic"
-    anthropic_api_key: str | None = None
+    # Login module -- single-user access gate, not multi-user auth.
+    # Login identity is `default_user_email` above (one identity, not two) --
+    # only the password is new here.
+    #
+    # No default for session_secret_key: it signs the session cookie, so a
+    # hardcoded fallback would mean anyone who reads this (now-public) repo
+    # could forge a valid session if the real env var were ever unset --
+    # fail loudly at startup instead of silently running insecure.
+    session_secret_key: str
+    auth_password: str | None = None
+
+    # AI Coach (Module 6) -- Ollama, local/GPU-hosted, not a cloud API.
+    llm_provider: str = "ollama"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_chat_model: str = "qwen3:14b"
+    ollama_embed_model: str = "nomic-embed-text"
 
     # Frontend
     cors_origins: list[str] = ["http://localhost:3000"]
