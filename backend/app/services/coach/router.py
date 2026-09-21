@@ -30,7 +30,7 @@ Rules:
 - Only state things you can support with a tool result. If a tool returns no data \
 or you don't have enough information, say so plainly rather than guessing.
 - When you use a tool result, refer to the specific numbers it returned.
-- Weather/air-quality/training-load relationships are estimates, not medical or \
+- Weather/training-load relationships are estimates, not medical or \
 causal claims -- describe them as "associated with" or "the model estimates", \
 never "caused by".
 - Keep answers concise and directly useful to a runner, not a data dump."""

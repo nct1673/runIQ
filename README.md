@@ -1,7 +1,7 @@
 # RunIQ
 
 Personal running-intelligence platform — turns Garmin running history plus
-weather/air-quality data into a personalized understanding of performance,
+weather data into a personalized understanding of performance,
 via classical ML predictions and an evidence-grounded AI running coach.
 
 Full product spec: [`RunIQ_Project_Blueprint.pdf`](./RunIQ_Project_Blueprint.pdf).

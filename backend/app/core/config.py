@@ -23,9 +23,8 @@ class Settings(BaseSettings):
     # Single-user system (blueprint §4) -- every write attaches to this user.
     default_user_email: str = "owner@runiq.local"
 
-    # External APIs (Module 1/2 -- Data Platform, Weather/AQ Intelligence)
+    # External APIs (Module 1/2 -- Data Platform, Weather Intelligence)
     openweather_api_key: str | None = None
-    google_air_quality_api_key: str | None = None
 
     # Garmin Connect (unofficial API via python-garminconnect)
     garmin_email: str | None = None

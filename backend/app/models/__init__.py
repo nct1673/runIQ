@@ -5,7 +5,6 @@ directly.
 from app.models.activity import Activity
 from app.models.activity_metrics import ActivityMetrics
 from app.models.activity_raw import ActivityRaw
-from app.models.air_quality import AirQuality
 from app.models.conversation import Conversation
 from app.models.conversation_message import ConversationMessage
 from app.models.goal import Goal
@@ -20,7 +19,6 @@ __all__ = [
     "Activity",
     "ActivityMetrics",
     "ActivityRaw",
-    "AirQuality",
     "Conversation",
     "ConversationMessage",
     "Goal",

@@ -11,8 +11,7 @@ users
   ├─ activities_raw            (bronze layer: raw imported rows, pre-parsing/normalization)
   └─ activities  (source = "garmin_csv_upload" for now)
        ├─ activity_metrics     (derived: baseline delta, weather-adjusted pace, load contribution)
-       ├─ weather_conditions   (1:1 snapshot at time of activity)
-       └─ air_quality          (1:1 snapshot at time of activity)
+       └─ weather_conditions   (1:1 snapshot at time of activity)
   ├─ training_load             (rolling 7d/28d snapshots, not tied to one activity)
   ├─ predictions                (5K/10K/half-marathon, versioned by model)
   ├─ goals                      (target time + race date)
@@ -54,9 +53,9 @@ file.
 One row per activity. `baseline_pace_delta_s_per_km`,
 `weather_adjusted_pace_s_per_km`, `training_load_contribution`.
 
-### `weather_conditions` / `air_quality`
+### `weather_conditions`
 One row per activity (1:1), snapshotted at import/enrichment time so we
-never need to re-query historical weather/AQ APIs later (blueprint §6).
+never need to re-query the historical weather API later (blueprint §6).
 
 ### `training_load`
 Rolling snapshot, not tied to a single activity: `as_of_date`, `load_7d`,
