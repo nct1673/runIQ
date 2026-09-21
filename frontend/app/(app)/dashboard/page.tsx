@@ -16,22 +16,42 @@ import {
 import MiniCalendar from "@/components/MiniCalendar";
 import StatCard from "@/components/StatCard";
 
+interface Summary {
+  total_runs: number;
+  total_distance_km: number;
+  total_duration_s: number;
+}
+
+function formatTotalDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  return `${hours}h ${minutes}m`;
+}
+
 /**
  * Blueprint §10: "what is happening to my running?" overview.
  *
- * UI-framework phase only -- the shell/layout is real, but every
- * chart/stat/schedule slot is an explicit placeholder rather than
- * fabricated numbers, since app/services/analytics_service.py,
- * training_load_service.py and goal_service.py are all still stubs.
+ * The four top stats are wired to GET /api/analytics/summary (real
+ * activities-table aggregates); Weekly Mileage/Zone Split/Time
+ * Predictor/Schedule are still explicit placeholders since their
+ * backing services (analytics_service.get_trends, training_load_service,
+ * prediction_service, goal_service) are all still stubs -- a bigger
+ * piece than the summary totals, not part of this pass.
  */
 export default function DashboardPage() {
   const [displayName, setDisplayName] = useState<string | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
 
   useEffect(() => {
     fetch("/api/profile/me")
       .then((res) => (res.ok ? res.json() : null))
       .then((profile) => setDisplayName(profile?.display_name || null))
       .catch(() => setDisplayName(null));
+
+    fetch("/api/analytics/summary")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setSummary)
+      .catch(() => setSummary(null));
   }, []);
 
   return (
@@ -56,9 +76,25 @@ export default function DashboardPage() {
       </Header>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard icon={HomeIcon} colorClassName="bg-stat-runs" label="Total Runs" />
-        <StatCard icon={TrendingUpIcon} colorClassName="bg-stat-distance" label="Total Distance" />
-        <StatCard icon={ClockIcon} colorClassName="bg-stat-time" label="Total Time" />
+        <StatCard
+          icon={HomeIcon}
+          colorClassName="bg-stat-runs"
+          label="Total Runs"
+          value={summary ? String(summary.total_runs) : undefined}
+        />
+        <StatCard
+          icon={TrendingUpIcon}
+          colorClassName="bg-stat-distance"
+          label="Total Distance"
+          value={summary ? `${summary.total_distance_km.toFixed(1)} km` : undefined}
+        />
+        <StatCard
+          icon={ClockIcon}
+          colorClassName="bg-stat-time"
+          label="Total Time"
+          value={summary ? formatTotalDuration(summary.total_duration_s) : undefined}
+        />
+        {/* Total Energy: no calories column on Activity yet -- see StatCard's comment */}
         <StatCard icon={BoltIcon} colorClassName="bg-stat-energy" label="Total Energy" />
       </div>
 
