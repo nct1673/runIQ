@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyPlaceholder } from "@/components/Card";
 import Header from "@/components/Header";
 import {
   ArrowUpRightIcon,
   BoltIcon,
+  ChevronDownIcon,
   ClockIcon,
   CloudIcon,
   HeartIcon,
@@ -176,12 +177,42 @@ export default function ActivitiesPage() {
       if (!byMonth.has(key)) byMonth.set(key, []);
       byMonth.get(key)!.push(a);
     }
-    return Array.from(byMonth.values()).map((group) => ({
-      label: monthLabel(group[0].started_at),
-      totalKm: group.reduce((sum, a) => sum + a.distance_km, 0),
-      activities: group,
-    }));
+    return Array.from(byMonth.values()).map((group) => {
+      const totalKm = group.reduce((sum, a) => sum + a.distance_km, 0);
+      const totalDurationS = group.reduce((sum, a) => sum + a.duration_s, 0);
+      return {
+        label: monthLabel(group[0].started_at),
+        totalKm,
+        totalDurationS,
+        // Weighted by distance (total time / total distance), not an
+        // average of each run's own pace -- matches how "pace" is
+        // computed everywhere else in the app (duration / distance).
+        avgPaceSPerKm: totalKm > 0 ? totalDurationS / totalKm : null,
+        activities: group,
+      };
+    });
   }, [activities]);
+
+  // Default-open the most recent month only, once, on first load --
+  // afterward this ref stops the effect from re-opening a month the
+  // user deliberately closed.
+  const [openMonths, setOpenMonths] = useState<Set<string>>(new Set());
+  const didDefaultOpen = useRef(false);
+  useEffect(() => {
+    if (groups.length > 0 && !didDefaultOpen.current) {
+      didDefaultOpen.current = true;
+      setOpenMonths(new Set([groups[0].label]));
+    }
+  }, [groups]);
+
+  function toggleMonth(label: string) {
+    setOpenMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }
 
   return (
     <div>
@@ -193,22 +224,43 @@ export default function ActivitiesPage() {
         <EmptyPlaceholder label="No processed activities yet -- press Update Data on the dashboard." />
       )}
 
-      <div className="flex flex-col gap-6">
-        {groups.map((group) => (
-          <div key={group.label} className="flex flex-col gap-3">
-            <div className="flex items-baseline justify-between px-1">
-              <h2 className="text-sm font-semibold text-text">{group.label}</h2>
-              <span className="text-xs text-text-muted">
-                {group.activities.length} run{group.activities.length === 1 ? "" : "s"} · {group.totalKm.toFixed(1)} km
-              </span>
+      <div className="flex flex-col gap-3">
+        {groups.map((group) => {
+          const isOpen = openMonths.has(group.label);
+          return (
+            <div key={group.label} className="rounded-2xl border border-border bg-surface">
+              <button
+                type="button"
+                onClick={() => toggleMonth(group.label)}
+                aria-expanded={isOpen}
+                className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-4 text-left"
+              >
+                <div className="flex items-center gap-2.5">
+                  <ChevronDownIcon
+                    className={"h-4 w-4 text-text-muted transition-transform " + (isOpen ? "" : "-rotate-90")}
+                  />
+                  <h2 className="text-sm font-semibold text-text">{group.label}</h2>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-text-muted">
+                  <span>
+                    {group.activities.length} run{group.activities.length === 1 ? "" : "s"}
+                  </span>
+                  <span>{group.totalKm.toFixed(1)} km</span>
+                  <span>{formatDuration(group.totalDurationS)}</span>
+                  <span>avg {formatPace(group.avgPaceSPerKm)}</span>
+                </div>
+              </button>
+
+              {isOpen && (
+                <div className="flex flex-col gap-3 px-5 pb-5">
+                  {group.activities.map((a) => (
+                    <ActivityCard key={a.id} activity={a} />
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="flex flex-col gap-3">
-              {group.activities.map((a) => (
-                <ActivityCard key={a.id} activity={a} />
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
