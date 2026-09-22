@@ -11,6 +11,7 @@ import {
   ClockIcon,
   DotsIcon,
   HomeIcon,
+  RefreshIcon,
   TrendingUpIcon,
 } from "@/components/icons";
 import MiniCalendar from "@/components/MiniCalendar";
@@ -41,6 +42,15 @@ function formatTotalDuration(seconds: number): string {
 export default function DashboardPage() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [updating, setUpdating] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+
+  function loadSummary() {
+    fetch("/api/analytics/summary")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setSummary)
+      .catch(() => setSummary(null));
+  }
 
   useEffect(() => {
     fetch("/api/profile/me")
@@ -48,11 +58,23 @@ export default function DashboardPage() {
       .then((profile) => setDisplayName(profile?.display_name || null))
       .catch(() => setDisplayName(null));
 
-    fetch("/api/analytics/summary")
-      .then((res) => (res.ok ? res.json() : null))
-      .then(setSummary)
-      .catch(() => setSummary(null));
+    loadSummary();
   }, []);
+
+  async function handleUpdateData() {
+    setUpdating(true);
+    setUpdateStatus(null);
+
+    try {
+      const res = await fetch("/api/activities/sync-garmin", { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      loadSummary(); // reflect the new activities in the stat cards right away
+    } catch (err) {
+      setUpdateStatus(`Update failed: ${(err as Error).message}`);
+    } finally {
+      setUpdating(false);
+    }
+  }
 
   return (
     <div>
@@ -60,6 +82,15 @@ export default function DashboardPage() {
         title={`Welcome, ${displayName || "Runner"}`}
         subtitle="Here's what's happening with your training."
       >
+        <button
+          type="button"
+          onClick={handleUpdateData}
+          disabled={updating}
+          className="flex w-[160px] items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-75"
+        >
+          <RefreshIcon className={"h-4 w-4 shrink-0" + (updating ? " animate-spin" : "")} />
+          {updating ? "Updating..." : "Update Data"}
+        </button>
         <button
           type="button"
           className="flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm text-text"
@@ -74,6 +105,8 @@ export default function DashboardPage() {
           <DotsIcon className="h-5 w-5" />
         </HeaderIconButton>
       </Header>
+
+      {updateStatus && <p className="-mt-3 mb-4 text-sm text-text-muted">{updateStatus}</p>}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard

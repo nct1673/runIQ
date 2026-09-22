@@ -11,7 +11,6 @@ import {
   ChatIcon,
   HomeIcon,
   LogoutIcon,
-  RefreshIcon,
   TrendingUpIcon,
   UserIcon,
 } from "@/components/icons";
@@ -19,7 +18,6 @@ import {
 const NAV_ITEMS: { href: string; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { href: "/dashboard", label: "Dashboard", icon: HomeIcon },
   { href: "/activities", label: "Activities", icon: ActivityListIcon },
-  { href: "/activities/upload", label: "Update Data", icon: RefreshIcon },
   { href: "/analytics", label: "Analytics", icon: BarChartIcon },
   { href: "/predictions", label: "Predictions", icon: TrendingUpIcon },
   { href: "/goals", label: "Goals", icon: CalendarIcon },

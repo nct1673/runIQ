@@ -8,14 +8,12 @@ import {
   CalendarIcon,
   ChatIcon,
   HomeIcon,
-  RefreshIcon,
   TrendingUpIcon,
 } from "@/components/icons";
 
 const MODULES = [
   { href: "/dashboard", label: "Dashboard", icon: HomeIcon },
   { href: "/activities", label: "Activities", icon: ActivityListIcon },
-  { href: "/activities/upload", label: "Update Data", icon: RefreshIcon },
   { href: "/analytics", label: "Analytics", icon: BarChartIcon },
   { href: "/predictions", label: "Predictions", icon: TrendingUpIcon },
   { href: "/goals", label: "Goals", icon: CalendarIcon },

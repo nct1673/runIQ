@@ -206,3 +206,37 @@ export function CheckIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function SunIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+    </svg>
+  );
+}
+
+export function CloudIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M7 18.5a4.5 4.5 0 0 1-.5-8.97 5.5 5.5 0 0 1 10.6-1.9A4 4 0 0 1 17 18.5H7Z" />
+    </svg>
+  );
+}
+
+export function RainIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M7 15.5a4.5 4.5 0 0 1-.5-8.97 5.5 5.5 0 0 1 10.6-1.9A4 4 0 0 1 17 15.5H7Z" />
+      <path d="M8.5 18.5 7.5 21M12.5 18.5l-1 2.5M16.5 18.5l-1 2.5" />
+    </svg>
+  );
+}
+
+export function HeartIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 20.5s-7.5-4.6-9.7-9.3C.7 7.7 2.4 4.5 5.6 4c2-.3 3.7.7 6.4 3.3C14.7 4.7 16.4 3.7 18.4 4c3.2.5 4.9 3.7 3.3 7.2C19.5 15.9 12 20.5 12 20.5Z" />
+    </svg>
+  );
+}

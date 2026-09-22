@@ -16,6 +16,13 @@ class ActivityOut(BaseModel):
     elevation_gain_m: float | None = None
     activity_type: str | None = None
 
+    # Denormalized from the linked weather_conditions row (absent for
+    # treadmill runs -- no GPS to look weather up against). Flattened onto
+    # ActivityOut rather than nested, since the frontend list only ever
+    # needs a handful of fields per card, not the full WeatherCondition.
+    temperature_c: float | None = None
+    weather_condition: str | None = None
+
     model_config = {"from_attributes": True}
 
 

@@ -14,7 +14,22 @@ from app.services.user_service import get_current_user
 
 settings = get_settings()
 
-app = FastAPI(title="RunIQ API", version="0.1.0")
+app = FastAPI(
+    title="RunIQ API",
+    version="0.1.0",
+    # Starlette's default (True) redirects a request missing a route's
+    # trailing slash using an ABSOLUTE URL built from *this* process's
+    # own host -- fine hit directly, but fatal behind the frontend's
+    # rewrite proxy: the proxy passes that redirect through unchanged,
+    # so the browser follows it straight to the backend's real
+    # host:port instead of staying on the frontend's origin, turning an
+    # intended same-origin call into a real cross-origin one (hits CORS,
+    # and drops cookies since fetch() doesn't send credentials
+    # cross-origin by default). Every route in app.api.routes is defined
+    # to match its exact expected path already (see e.g.
+    # activities.py's list route), so nothing depends on this redirect.
+    redirect_slashes=False,
+)
 
 app.add_middleware(SessionMiddleware, secret_key=settings.session_secret_key)
 app.add_middleware(

@@ -7,12 +7,12 @@ from app.core.db import get_db
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("")
 def list_goals(db: Session = Depends(get_db)) -> list[dict]:
     raise NotImplementedError("Phase 5: app.services.goal_service.list_goals")
 
 
-@router.post("/")
+@router.post("")
 def create_goal(db: Session = Depends(get_db)) -> dict:
     raise NotImplementedError("Phase 5: app.services.goal_service.create_goal")
 

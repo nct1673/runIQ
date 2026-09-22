@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     ollama_embed_model: str = "nomic-embed-text"
 
     # Frontend
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 
 @lru_cache
