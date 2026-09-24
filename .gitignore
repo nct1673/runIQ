@@ -91,3 +91,6 @@ frontend/next-env.d.ts
 # Playwright MCP test artifacts
 .playwright-mcp/
 
+# Claude Code personal settings (machine-local permission overrides)
+.claude/settings.local.json
+

@@ -148,6 +148,34 @@ export function ArrowUpRightIcon(props: IconProps) {
   );
 }
 
+export function FlagIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 21V4" />
+      <path d="M6 4.5c2-1.2 4-1.2 6 0s4 1.2 6 0v9c-2 1.2-4 1.2-6 0s-4-1.2-6 0Z" />
+    </svg>
+  );
+}
+
+export function TrophyIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" />
+      <path d="M7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3" />
+      <path d="M12 14v3M9 20h6M9.5 20c0-1.8.7-2.6 1.2-3h2.6c.5.4 1.2 1.2 1.2 3" />
+    </svg>
+  );
+}
+
+export function SwapIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 8h13M13 4l4 4-4 4" />
+      <path d="M20 16H7M11 20l-4-4 4-4" />
+    </svg>
+  );
+}
+
 export function ClockIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
@@ -237,6 +265,37 @@ export function HeartIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
       <path d="M12 20.5s-7.5-4.6-9.7-9.3C.7 7.7 2.4 4.5 5.6 4c2-.3 3.7.7 6.4 3.3C14.7 4.7 16.4 3.7 18.4 4c3.2.5 4.9 3.7 3.3 7.2C19.5 15.9 12 20.5 12 20.5Z" />
+    </svg>
+  );
+}
+
+export function RunnerIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="15" cy="5" r="1.7" fill="currentColor" stroke="none" />
+      <path d="M13.5 7.5 11 13" />
+      <path d="M11 13 14 16 12.5 20" />
+      <path d="M11 13 7.5 14.5 5 13.5" />
+      <path d="M13 8.5 16.5 9.5 18.5 7" />
+      <path d="M13 8.5 10 10.5 8 13.5" />
+    </svg>
+  );
+}
+
+export function TrendUpIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M5 16 10 11 14 15 19 8" />
+      <path d="M13 8h6v6" />
+    </svg>
+  );
+}
+
+export function TrendDownIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M5 8 10 13 14 9 19 16" />
+      <path d="M13 16h6v-6" />
     </svg>
   );
 }
