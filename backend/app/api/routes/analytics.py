@@ -2,7 +2,7 @@
 baseline, similar-run engine. Delegates to app.services.analytics_service /
 baseline_service / similar_run_service -- this file stays routing-only.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -28,21 +28,30 @@ def get_summary(db: Session = Depends(get_db)) -> SummaryOut:
 
 
 @router.get("/weekly-mileage", response_model=list[WeeklyMileagePoint])
-def get_weekly_mileage(weeks: int = 10, db: Session = Depends(get_db)) -> list[WeeklyMileagePoint]:
-    """Distance + run count per calendar week, oldest to newest."""
+def get_weekly_mileage(
+    weeks: int = Query(10, ge=1, le=104), db: Session = Depends(get_db)
+) -> list[WeeklyMileagePoint]:
+    """Distance + run count per calendar week, oldest to newest. Capped at
+    104 weeks (2 years) -- get_weekly_mileage builds one dict per week
+    in Python, so an unbounded `weeks` is a cheap way to force a huge
+    allocation."""
     user = get_or_create_default_user(db)
     return analytics_service.get_weekly_mileage(db, user.id, weeks=weeks)
 
 
 @router.get("/monthly-mileage", response_model=list[MonthlyMileagePoint])
-def get_monthly_mileage(months: int = 12, db: Session = Depends(get_db)) -> list[MonthlyMileagePoint]:
-    """Distance + run count per calendar month, oldest to newest."""
+def get_monthly_mileage(
+    months: int = Query(12, ge=1, le=60), db: Session = Depends(get_db)
+) -> list[MonthlyMileagePoint]:
+    """Distance + run count per calendar month, oldest to newest. Capped
+    at 60 months (5 years), same resource-exhaustion reasoning as
+    get_weekly_mileage."""
     user = get_or_create_default_user(db)
     return analytics_service.get_monthly_mileage(db, user.id, months=months)
 
 
 @router.get("/pace-trend", response_model=list[PaceTrendPoint])
-def get_pace_trend(limit: int = 12, db: Session = Depends(get_db)) -> list[PaceTrendPoint]:
+def get_pace_trend(limit: int = Query(12, ge=1, le=200), db: Session = Depends(get_db)) -> list[PaceTrendPoint]:
     """The last `limit` runs' pace, oldest to newest."""
     user = get_or_create_default_user(db)
     return analytics_service.get_pace_trend(db, user.id, limit=limit)
