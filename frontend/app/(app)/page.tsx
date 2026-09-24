@@ -5,8 +5,8 @@ import Header from "@/components/Header";
 import {
   ActivityListIcon,
   BarChartIcon,
-  CalendarIcon,
   ChatIcon,
+  FlagIcon,
   HomeIcon,
   TrendingUpIcon,
 } from "@/components/icons";
@@ -16,7 +16,7 @@ const MODULES = [
   { href: "/activities", label: "Activities", icon: ActivityListIcon },
   { href: "/analytics", label: "Analytics", icon: BarChartIcon },
   { href: "/predictions", label: "Predictions", icon: TrendingUpIcon },
-  { href: "/goals", label: "Goals", icon: CalendarIcon },
+  { href: "/race", label: "Race", icon: FlagIcon },
   { href: "/coach", label: "AI Coach", icon: ChatIcon },
 ];
 

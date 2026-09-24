@@ -7,8 +7,8 @@ import type { ComponentType } from "react";
 import {
   ActivityListIcon,
   BarChartIcon,
-  CalendarIcon,
   ChatIcon,
+  FlagIcon,
   HomeIcon,
   LogoutIcon,
   TrendingUpIcon,
@@ -20,7 +20,7 @@ const NAV_ITEMS: { href: string; label: string; icon: ComponentType<{ className?
   { href: "/activities", label: "Activities", icon: ActivityListIcon },
   { href: "/analytics", label: "Analytics", icon: BarChartIcon },
   { href: "/predictions", label: "Predictions", icon: TrendingUpIcon },
-  { href: "/goals", label: "Goals", icon: CalendarIcon },
+  { href: "/race", label: "Race", icon: FlagIcon },
   { href: "/coach", label: "Coach", icon: ChatIcon },
   { href: "/profile", label: "Profile", icon: UserIcon },
 ];

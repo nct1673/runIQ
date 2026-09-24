@@ -7,9 +7,9 @@ from app.models.activity_metrics import ActivityMetrics
 from app.models.activity_raw import ActivityRaw
 from app.models.conversation import Conversation
 from app.models.conversation_message import ConversationMessage
-from app.models.goal import Goal
 from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.prediction import Prediction
+from app.models.race import Race
 from app.models.training_load import TrainingLoad
 from app.models.user import User
 from app.models.user_profile import UserProfile
@@ -21,9 +21,9 @@ __all__ = [
     "ActivityRaw",
     "Conversation",
     "ConversationMessage",
-    "Goal",
     "KnowledgeChunk",
     "Prediction",
+    "Race",
     "TrainingLoad",
     "User",
     "UserProfile",
