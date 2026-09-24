@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import Card, { EmptyPlaceholder } from "@/components/Card";
+import MonthlyMileageChart, { MonthlyMileagePoint } from "@/components/charts/MonthlyMileageChart";
+import PaceTrendChart, { PaceTrendPoint } from "@/components/charts/PaceTrendChart";
+import TypeSplitChart, { TypeSplitEntry } from "@/components/charts/TypeSplitChart";
+import WeeklyMileageChart, { WeeklyMileagePoint } from "@/components/charts/WeeklyMileageChart";
 import Header, { HeaderIconButton } from "@/components/Header";
 import {
   BellIcon,
@@ -10,46 +14,95 @@ import {
   ChevronDownIcon,
   ClockIcon,
   DotsIcon,
-  HomeIcon,
   RefreshIcon,
+  SwapIcon,
   TrendingUpIcon,
 } from "@/components/icons";
-import MiniCalendar from "@/components/MiniCalendar";
+import MiniCalendar, { RunDay } from "@/components/MiniCalendar";
 import StatCard from "@/components/StatCard";
+import { formatDuration, formatPace, formatTotalDuration } from "@/lib/format";
 
 interface Summary {
   total_runs: number;
   total_distance_km: number;
   total_duration_s: number;
+  avg_pace_s_per_km: number | null;
+  distance_delta_pct: number | null;
 }
 
-function formatTotalDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.round((seconds % 3600) / 60);
-  return `${hours}h ${minutes}m`;
+interface ActivityDate {
+  id: string;
+  started_at: string;
+  distance_km: number;
 }
+
+interface Prediction {
+  distance_label: string;
+  predicted_time_s: number;
+}
+
+const PREDICTOR_DISTANCES: { label: string; distance_label: string }[] = [
+  { label: "5K", distance_label: "5K" },
+  { label: "10K", distance_label: "10K" },
+  { label: "Half", distance_label: "half_marathon" },
+];
 
 /**
- * Blueprint §10: "what is happening to my running?" overview.
- *
- * The four top stats are wired to GET /api/analytics/summary (real
- * activities-table aggregates); Weekly Mileage/Zone Split/Time
- * Predictor/Schedule are still explicit placeholders since their
- * backing services (analytics_service.get_trends, training_load_service,
- * prediction_service, goal_service) are all still stubs -- a bigger
- * piece than the summary totals, not part of this pass.
+ * Blueprint §10: "what is happening to my running?" overview. Every card
+ * here is wired to real `activities`-table aggregates (see
+ * app/services/analytics_service.py). Time Predictor is the one
+ * exception -- it's Garmin's own race predictor (see
+ * app/services/prediction_service.py), a stopgap until RunIQ's own
+ * model (app/ml/) exists.
  */
 export default function DashboardPage() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [weeklyMileage, setWeeklyMileage] = useState<WeeklyMileagePoint[] | null>(null);
+  const [monthlyMileage, setMonthlyMileage] = useState<MonthlyMileagePoint[] | null>(null);
+  const [mileageView, setMileageView] = useState<"weekly" | "monthly">("weekly");
+  const [paceTrend, setPaceTrend] = useState<PaceTrendPoint[] | null>(null);
+  const [typeSplit, setTypeSplit] = useState<TypeSplitEntry[] | null>(null);
+  const [activityDates, setActivityDates] = useState<ActivityDate[] | null>(null);
+  const [predictions, setPredictions] = useState<Prediction[] | null>(null);
   const [updating, setUpdating] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
 
-  function loadSummary() {
+  function loadDashboardData() {
     fetch("/api/analytics/summary")
       .then((res) => (res.ok ? res.json() : null))
       .then(setSummary)
       .catch(() => setSummary(null));
+
+    fetch("/api/analytics/weekly-mileage?weeks=10")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setWeeklyMileage)
+      .catch(() => setWeeklyMileage(null));
+
+    fetch("/api/analytics/monthly-mileage?months=12")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setMonthlyMileage)
+      .catch(() => setMonthlyMileage(null));
+
+    fetch("/api/analytics/pace-trend?limit=12")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setPaceTrend)
+      .catch(() => setPaceTrend(null));
+
+    fetch("/api/analytics/type-split")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setTypeSplit)
+      .catch(() => setTypeSplit(null));
+
+    fetch("/api/activities")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setActivityDates)
+      .catch(() => setActivityDates(null));
+
+    fetch("/api/predictions")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setPredictions)
+      .catch(() => setPredictions(null));
   }
 
   useEffect(() => {
@@ -58,7 +111,7 @@ export default function DashboardPage() {
       .then((profile) => setDisplayName(profile?.display_name || null))
       .catch(() => setDisplayName(null));
 
-    loadSummary();
+    loadDashboardData();
   }, []);
 
   async function handleUpdateData() {
@@ -68,13 +121,25 @@ export default function DashboardPage() {
     try {
       const res = await fetch("/api/activities/sync-garmin", { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
-      loadSummary(); // reflect the new activities in the stat cards right away
+      loadDashboardData(); // reflect the new activities everywhere right away
     } catch (err) {
       setUpdateStatus(`Update failed: ${(err as Error).message}`);
     } finally {
       setUpdating(false);
     }
   }
+
+  const runsByDate = useMemo(() => {
+    const map = new Map<string, RunDay>();
+    for (const a of activityDates ?? []) {
+      const key = a.started_at.slice(0, 10); // "YYYY-MM-DD" prefix of the ISO timestamp
+      const entry = map.get(key) ?? { count: 0, distance_km: 0 };
+      entry.count += 1;
+      entry.distance_km += a.distance_km;
+      map.set(key, entry);
+    }
+    return map;
+  }, [activityDates]);
 
   return (
     <div>
@@ -109,17 +174,38 @@ export default function DashboardPage() {
       {updateStatus && <p className="-mt-3 mb-4 text-sm text-text-muted">{updateStatus}</p>}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard
-          icon={HomeIcon}
-          colorClassName="bg-stat-runs"
-          label="Total Runs"
-          value={summary ? String(summary.total_runs) : undefined}
-        />
+        <Card>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-text-muted">
+              {mileageView === "weekly" ? "Weekly Mileage" : "Monthly Mileage"}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setMileageView((v) => (v === "weekly" ? "monthly" : "weekly"))}
+              title={`Switch to ${mileageView === "weekly" ? "monthly" : "weekly"} view`}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted hover:bg-surface-hover hover:text-text"
+            >
+              <SwapIcon className="h-4 w-4" />
+            </button>
+          </div>
+          {mileageView === "weekly" ? (
+            weeklyMileage ? (
+              <WeeklyMileageChart data={weeklyMileage} />
+            ) : (
+              <EmptyPlaceholder label="Loading..." />
+            )
+          ) : monthlyMileage ? (
+            <MonthlyMileageChart data={monthlyMileage} />
+          ) : (
+            <EmptyPlaceholder label="Loading..." />
+          )}
+        </Card>
         <StatCard
           icon={TrendingUpIcon}
           colorClassName="bg-stat-distance"
           label="Total Distance"
           value={summary ? `${summary.total_distance_km.toFixed(1)} km` : undefined}
+          deltaPct={summary?.distance_delta_pct}
         />
         <StatCard
           icon={ClockIcon}
@@ -127,31 +213,48 @@ export default function DashboardPage() {
           label="Total Time"
           value={summary ? formatTotalDuration(summary.total_duration_s) : undefined}
         />
-        {/* Total Energy: no calories column on Activity yet -- see StatCard's comment */}
-        <StatCard icon={BoltIcon} colorClassName="bg-stat-energy" label="Total Energy" />
+        <StatCard
+          icon={BoltIcon}
+          colorClassName="bg-stat-energy"
+          label="Avg Pace"
+          value={summary?.avg_pace_s_per_km != null ? formatPace(summary.avg_pace_s_per_km) : undefined}
+        />
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Card title="Weekly Mileage" href="/analytics">
-              <EmptyPlaceholder label="No data yet" />
+            <Card title="Pace Trend">
+              {paceTrend ? <PaceTrendChart data={paceTrend} /> : <EmptyPlaceholder label="Loading..." />}
             </Card>
-            <Card title="Zone Split" href="/analytics">
-              <EmptyPlaceholder label="No data yet" />
+            <Card title="Run Type Split">
+              {typeSplit ? <TypeSplitChart data={typeSplit} /> : <EmptyPlaceholder label="Loading..." />}
             </Card>
           </div>
 
-          <Card title="Time Predictor" href="/predictions">
-            <EmptyPlaceholder label="No prediction yet" />
+          <Card title="Time Predictor">
+            {predictions && predictions.length > 0 ? (
+              <div className="flex h-full flex-col justify-center gap-4">
+                {PREDICTOR_DISTANCES.map(({ label, distance_label }) => {
+                  const prediction = predictions.find((p) => p.distance_label === distance_label);
+                  return (
+                    <div key={distance_label} className="flex items-center justify-between text-sm">
+                      <span className="text-text-muted">{label}</span>
+                      <span className="font-semibold text-text">
+                        {prediction ? formatDuration(prediction.predicted_time_s) : "--"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyPlaceholder label={predictions ? "No prediction yet" : "Loading..."} />
+            )}
           </Card>
         </div>
 
-        <Card title="Your Schedule" href="/goals">
-          <MiniCalendar />
-          <div className="mt-5 border-t border-border pt-5">
-            <EmptyPlaceholder label="No scheduled workouts yet" />
-          </div>
+        <Card title="Your Schedule">
+          <MiniCalendar runsByDate={runsByDate} />
         </Card>
       </div>
     </div>
