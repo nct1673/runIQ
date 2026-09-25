@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 import Card, { EmptyPlaceholder } from "@/components/Card";
+import MetricTrendChart, { BiomechanicsTrendPoint } from "@/components/charts/MetricTrendChart";
 import MonthlyMileageChart, { MonthlyMileagePoint } from "@/components/charts/MonthlyMileageChart";
 import PaceTrendChart, { PaceTrendPoint } from "@/components/charts/PaceTrendChart";
-import TypeSplitChart, { TypeSplitEntry } from "@/components/charts/TypeSplitChart";
 import WeeklyMileageChart, { WeeklyMileagePoint } from "@/components/charts/WeeklyMileageChart";
 import Header, { HeaderIconButton } from "@/components/Header";
 import {
@@ -62,7 +62,7 @@ export default function DashboardPage() {
   const [monthlyMileage, setMonthlyMileage] = useState<MonthlyMileagePoint[] | null>(null);
   const [mileageView, setMileageView] = useState<"weekly" | "monthly">("weekly");
   const [paceTrend, setPaceTrend] = useState<PaceTrendPoint[] | null>(null);
-  const [typeSplit, setTypeSplit] = useState<TypeSplitEntry[] | null>(null);
+  const [biomechanicsTrend, setBiomechanicsTrend] = useState<BiomechanicsTrendPoint[] | null>(null);
   const [activityDates, setActivityDates] = useState<ActivityDate[] | null>(null);
   const [predictions, setPredictions] = useState<Prediction[] | null>(null);
   const [updating, setUpdating] = useState(false);
@@ -84,15 +84,15 @@ export default function DashboardPage() {
       .then(setMonthlyMileage)
       .catch(() => setMonthlyMileage(null));
 
-    fetch("/api/analytics/pace-trend?limit=12")
+    fetch("/api/analytics/pace-trend?months=6")
       .then((res) => (res.ok ? res.json() : null))
       .then(setPaceTrend)
       .catch(() => setPaceTrend(null));
 
-    fetch("/api/analytics/type-split")
+    fetch("/api/analytics/biomechanics-trend?months=6")
       .then((res) => (res.ok ? res.json() : null))
-      .then(setTypeSplit)
-      .catch(() => setTypeSplit(null));
+      .then(setBiomechanicsTrend)
+      .catch(() => setBiomechanicsTrend(null));
 
     fetch("/api/activities")
       .then((res) => (res.ok ? res.json() : null))
@@ -174,31 +174,8 @@ export default function DashboardPage() {
       {updateStatus && <p className="-mt-3 mb-4 text-sm text-text-muted">{updateStatus}</p>}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card>
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-medium text-text-muted">
-              {mileageView === "weekly" ? "Weekly Mileage" : "Monthly Mileage"}
-            </h3>
-            <button
-              type="button"
-              onClick={() => setMileageView((v) => (v === "weekly" ? "monthly" : "weekly"))}
-              title={`Switch to ${mileageView === "weekly" ? "monthly" : "weekly"} view`}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted hover:bg-surface-hover hover:text-text"
-            >
-              <SwapIcon className="h-4 w-4" />
-            </button>
-          </div>
-          {mileageView === "weekly" ? (
-            weeklyMileage ? (
-              <WeeklyMileageChart data={weeklyMileage} />
-            ) : (
-              <EmptyPlaceholder label="Loading..." />
-            )
-          ) : monthlyMileage ? (
-            <MonthlyMileageChart data={monthlyMileage} />
-          ) : (
-            <EmptyPlaceholder label="Loading..." />
-          )}
+        <Card title="Weekly Mileage">
+          <EmptyPlaceholder label="No data" />
         </Card>
         <StatCard
           icon={TrendingUpIcon}
@@ -225,10 +202,33 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-4 lg:col-span-2">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Card title="Pace Trend">
-              {paceTrend ? <PaceTrendChart data={paceTrend} /> : <EmptyPlaceholder label="Loading..." />}
+              {paceTrend ? <PaceTrendChart data={paceTrend} months={6} /> : <EmptyPlaceholder label="Loading..." />}
             </Card>
-            <Card title="Run Type Split">
-              {typeSplit ? <TypeSplitChart data={typeSplit} /> : <EmptyPlaceholder label="Loading..." />}
+            <Card>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-medium text-text-muted">
+                  {mileageView === "weekly" ? "Weekly Mileage" : "Monthly Mileage"}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setMileageView((v) => (v === "weekly" ? "monthly" : "weekly"))}
+                  title={`Switch to ${mileageView === "weekly" ? "monthly" : "weekly"} view`}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted hover:bg-surface-hover hover:text-text"
+                >
+                  <SwapIcon className="h-4 w-4" />
+                </button>
+              </div>
+              {mileageView === "weekly" ? (
+                weeklyMileage ? (
+                  <WeeklyMileageChart data={weeklyMileage} />
+                ) : (
+                  <EmptyPlaceholder label="Loading..." />
+                )
+              ) : monthlyMileage ? (
+                <MonthlyMileageChart data={monthlyMileage} />
+              ) : (
+                <EmptyPlaceholder label="Loading..." />
+              )}
             </Card>
           </div>
 
@@ -255,6 +255,64 @@ export default function DashboardPage() {
 
         <Card title="Your Schedule">
           <MiniCalendar runsByDate={runsByDate} />
+        </Card>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Card title="Cadence">
+          {biomechanicsTrend ? (
+            <MetricTrendChart
+              data={biomechanicsTrend}
+              getValue={(d) => d.avg_cadence}
+              formatValue={(v) => `${Math.round(v)} spm`}
+            />
+          ) : (
+            <EmptyPlaceholder label="Loading..." />
+          )}
+        </Card>
+        <Card title="Stride Length">
+          {biomechanicsTrend ? (
+            <MetricTrendChart
+              data={biomechanicsTrend}
+              getValue={(d) => d.avg_stride_length}
+              formatValue={(v) => `${v.toFixed(1)} cm`}
+            />
+          ) : (
+            <EmptyPlaceholder label="Loading..." />
+          )}
+        </Card>
+        <Card title="Vertical Oscillation">
+          {biomechanicsTrend ? (
+            <MetricTrendChart
+              data={biomechanicsTrend}
+              getValue={(d) => d.avg_vertical_oscillation}
+              formatValue={(v) => `${v.toFixed(1)} cm`}
+            />
+          ) : (
+            <EmptyPlaceholder label="Loading..." />
+          )}
+        </Card>
+        <Card title="Vertical Ratio">
+          {biomechanicsTrend ? (
+            <MetricTrendChart
+              data={biomechanicsTrend}
+              getValue={(d) => d.avg_vertical_ratio}
+              formatValue={(v) => `${v.toFixed(1)}%`}
+            />
+          ) : (
+            <EmptyPlaceholder label="Loading..." />
+          )}
+        </Card>
+        <Card title="Ground Contact Time">
+          {biomechanicsTrend ? (
+            <MetricTrendChart
+              data={biomechanicsTrend}
+              getValue={(d) => d.avg_ground_contact_time}
+              formatValue={(v) => `${Math.round(v)} ms`}
+            />
+          ) : (
+            <EmptyPlaceholder label="Loading..." />
+          )}
         </Card>
       </div>
     </div>

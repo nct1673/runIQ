@@ -136,26 +136,70 @@ def get_monthly_mileage(db: Session, user_id: uuid.UUID, months: int = 12) -> li
     ]
 
 
-def get_pace_trend(db: Session, user_id: uuid.UUID, limit: int = 12) -> list[dict]:
-    """The last `limit` runs' pace, oldest to newest, for a trend line --
-    only runs with a known pace (avg_pace_s_per_km is nullable on
-    Activity for e.g. malformed rows).
+def _recent_aerobic_base_activities(db: Session, user_id: uuid.UUID, months: int) -> list[Activity]:
+    """AEROBIC_BASE-labeled activities from the last `months` calendar
+    months, oldest to newest -- the shared basis for pace-trend and
+    biomechanics-trend, both "how's this metric moving on easy runs"
+    charts that would otherwise get skewed by hard workouts/races run
+    at a deliberately different effort.
     """
-    rows = db.execute(
-        select(Activity)
-        .where(Activity.user_id == user_id, Activity.avg_pace_s_per_km.is_not(None))
-        .order_by(Activity.started_at.desc())
-        .limit(limit)
-    ).scalars().all()
+    earliest = _shift_months(datetime.utcnow().date().replace(day=1), -(months - 1))
 
+    return list(
+        db.execute(
+            select(Activity)
+            .where(
+                Activity.user_id == user_id,
+                Activity.training_effect_label == "AEROBIC_BASE",
+                Activity.started_at >= earliest,
+            )
+            .order_by(Activity.started_at.asc())
+        ).scalars().all()
+    )
+
+
+def get_pace_trend(db: Session, user_id: uuid.UUID, months: int = 6) -> list[dict]:
+    """Pace for AEROBIC_BASE runs in the last `months` calendar months,
+    oldest to newest. Only runs with a known pace (avg_pace_s_per_km is
+    nullable on Activity for e.g. malformed rows).
+    """
     return [
         {
             "activity_id": str(a.id),
             "started_at": a.started_at,
             "avg_pace_s_per_km": a.avg_pace_s_per_km,
             "distance_km": a.distance_km,
+            "activity_type": a.activity_type,
         }
-        for a in reversed(rows)
+        for a in _recent_aerobic_base_activities(db, user_id, months)
+        if a.avg_pace_s_per_km is not None
+    ]
+
+
+def get_biomechanics_trend(db: Session, user_id: uuid.UUID, months: int = 6) -> list[dict]:
+    """Cadence/stride/vertical-oscillation/vertical-ratio/ground-contact-
+    time for AEROBIC_BASE runs in the last `months` calendar months,
+    oldest to newest -- same basis as get_pace_trend (see
+    _recent_aerobic_base_activities), one row per activity with all five
+    metrics together so the frontend can chart each as its own card
+    from a single fetch. Individual metrics are nullable on Activity
+    (not every device/activity records all of them); rows are still
+    included with whichever fields are present, since a per-metric chart
+    filters its own nulls.
+    """
+    return [
+        {
+            "activity_id": str(a.id),
+            "started_at": a.started_at,
+            "distance_km": a.distance_km,
+            "activity_type": a.activity_type,
+            "avg_cadence": a.avg_cadence,
+            "avg_stride_length": a.avg_stride_length,
+            "avg_vertical_oscillation": a.avg_vertical_oscillation,
+            "avg_vertical_ratio": a.avg_vertical_ratio,
+            "avg_ground_contact_time": a.avg_ground_contact_time,
+        }
+        for a in _recent_aerobic_base_activities(db, user_id, months)
     ]
 
 

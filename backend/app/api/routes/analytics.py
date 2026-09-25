@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.schemas.analytics import (
+    BiomechanicsTrendPoint,
     MonthlyMileagePoint,
     PaceTrendPoint,
     SummaryOut,
@@ -51,10 +52,24 @@ def get_monthly_mileage(
 
 
 @router.get("/pace-trend", response_model=list[PaceTrendPoint])
-def get_pace_trend(limit: int = Query(12, ge=1, le=200), db: Session = Depends(get_db)) -> list[PaceTrendPoint]:
-    """The last `limit` runs' pace, oldest to newest."""
+def get_pace_trend(
+    months: int = Query(6, ge=1, le=24), db: Session = Depends(get_db)
+) -> list[PaceTrendPoint]:
+    """AEROBIC_BASE runs' pace over the last `months` calendar months,
+    oldest to newest."""
     user = get_or_create_default_user(db)
-    return analytics_service.get_pace_trend(db, user.id, limit=limit)
+    return analytics_service.get_pace_trend(db, user.id, months=months)
+
+
+@router.get("/biomechanics-trend", response_model=list[BiomechanicsTrendPoint])
+def get_biomechanics_trend(
+    months: int = Query(6, ge=1, le=24), db: Session = Depends(get_db)
+) -> list[BiomechanicsTrendPoint]:
+    """Cadence/stride/vertical-oscillation/vertical-ratio/ground-contact-
+    time for AEROBIC_BASE runs over the last `months` calendar months,
+    oldest to newest -- one row per activity, all five metrics together."""
+    user = get_or_create_default_user(db)
+    return analytics_service.get_biomechanics_trend(db, user.id, months=months)
 
 
 @router.get("/type-split", response_model=list[TypeSplitEntry])

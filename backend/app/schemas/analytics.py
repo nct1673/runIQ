@@ -32,6 +32,19 @@ class PaceTrendPoint(BaseModel):
     started_at: datetime
     avg_pace_s_per_km: float
     distance_km: float
+    activity_type: str | None = None
+
+
+class BiomechanicsTrendPoint(BaseModel):
+    activity_id: str
+    started_at: datetime
+    distance_km: float
+    activity_type: str | None = None
+    avg_cadence: float | None = None
+    avg_stride_length: float | None = None
+    avg_vertical_oscillation: float | None = None
+    avg_vertical_ratio: float | None = None
+    avg_ground_contact_time: float | None = None
 
 
 class TypeSplitEntry(BaseModel):
