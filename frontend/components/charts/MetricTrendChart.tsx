@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { monthLabel, movingAverage, niceTicks, shiftMonths, smoothPath, startOfMonth } from "@/components/charts/trendMath";
+import { linearRegressionLine, monthLabel, niceTicks, shiftMonths, smoothPath, startOfMonth } from "@/components/charts/trendMath";
 import { formatShortDate } from "@/lib/format";
 
 export interface BiomechanicsTrendPoint {
@@ -15,14 +15,19 @@ export interface BiomechanicsTrendPoint {
   avg_vertical_oscillation: number | null;
   avg_vertical_ratio: number | null;
   avg_ground_contact_time: number | null;
+  avg_hr: number | null;
+  avg_power: number | null;
+  norm_power: number | null;
+  elevation_gain_m: number | null;
+  calories: number | null;
+  temperature_c: number | null;
+  humidity_pct: number | null;
 }
 
 const CHART_HEIGHT = 160;
 const TOP = 12;
 const BOTTOM = CHART_HEIGHT - 20;
-const MOVING_AVERAGE_WINDOW = 5;
-const MIN_DOT_PX = 5;
-const MAX_DOT_PX = 12;
+const DOT_PX = 8;
 
 const TYPE_COLOR: Record<string, string> = {
   running: "var(--color-stat-runs)",
@@ -34,21 +39,33 @@ const TYPE_LABEL: Record<string, string> = {
 };
 const DEFAULT_DOT_COLOR = "var(--color-text-muted)";
 
-/** Same dot-scatter + moving-average design as PaceTrendChart, generalized
+/** Same dot-scatter + straight trend-line design as PaceTrendChart, generalized
  * to any single numeric field off BiomechanicsTrendPoint (cadence, stride
  * length, vertical oscillation/ratio, ground contact time) -- one fetch
  * (GET /api/analytics/biomechanics-trend) backs all five dashboard cards,
- * each rendering this component with its own `getValue`/`formatValue`. */
+ * each rendering this component with its own `getValue`/`formatValue`. When
+ * `goodDirection` is given, the trend line is colored green/red by whether
+ * the metric actually improved first-run to last-run; metrics with no
+ * universal "better" direction (e.g. cadence, stride length -- both are
+ * target-range, not monotonic) should leave it unset, which renders a
+ * neutral line with the delta still shown but unjudged. */
 export default function MetricTrendChart({
   data,
   months = 6,
   getValue,
   formatValue,
+  getColor,
+  goodDirection,
 }: {
   data: BiomechanicsTrendPoint[];
   months?: number;
   getValue: (d: BiomechanicsTrendPoint) => number | null;
   formatValue: (v: number) => string;
+  /** Overrides the default activity-type dot coloring, e.g. to color by
+   * the metric's own value (a zone banding) instead of outdoor/treadmill. */
+  getColor?: (d: BiomechanicsTrendPoint) => string;
+  /** Which direction counts as "improving" for this metric, if any. */
+  goodDirection?: "up" | "down";
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -67,11 +84,6 @@ export default function MetricTrendChart({
   const valSpan = domainMax - domainMin || 1;
   const yForValue = (v: number) => TOP + (1 - (v - domainMin) / valSpan) * (BOTTOM - TOP);
 
-  const distances = withValue.map((p) => p.d.distance_km);
-  const minDist = Math.min(...distances);
-  const maxDist = Math.max(...distances);
-  const distSpan = maxDist - minDist || 1;
-
   const domainStart = shiftMonths(startOfMonth(new Date()), -(months - 1)).getTime();
   const domainEnd = Date.now();
   const domainSpan = domainEnd - domainStart || 1;
@@ -79,13 +91,18 @@ export default function MetricTrendChart({
   const points = withValue.map((p) => {
     const t = new Date(p.d.started_at).getTime();
     const x = Math.min(100, Math.max(0, ((t - domainStart) / domainSpan) * 100));
-    const dotPx = MIN_DOT_PX + ((p.d.distance_km - minDist) / distSpan) * (MAX_DOT_PX - MIN_DOT_PX);
-    return { x, y: yForValue(p.value), dotPx, value: p.value, d: p.d };
+    return { x, y: yForValue(p.value), value: p.value, d: p.d };
   });
 
-  const maValues = movingAverage(values, MOVING_AVERAGE_WINDOW);
-  const maPoints = points.map((p, i) => ({ x: p.x, y: yForValue(maValues[i]) }));
-  const trendPath = smoothPath(maPoints);
+  const trendPath = smoothPath(linearRegressionLine(points));
+
+  // Separate regression in raw value-space (not pixel-space) just to
+  // read off the fitted first-run -> last-run change.
+  const trendValueLine = linearRegressionLine(points.map((p) => ({ x: p.x, y: p.value })));
+  const delta = trendValueLine[trendValueLine.length - 1].y - trendValueLine[0].y;
+  const isImproving = goodDirection != null && (goodDirection === "down" ? delta <= 0 : delta >= 0);
+  const trendColor = goodDirection == null ? "var(--color-trend-line)" : isImproving ? "var(--color-positive)" : "var(--color-negative)";
+  const deltaSign = delta > 0 ? "+" : delta < 0 ? "-" : "";
 
   const monthTicks = Array.from({ length: months }, (_, i) => {
     const d = shiftMonths(startOfMonth(new Date()), -(months - 1) + i);
@@ -95,7 +112,16 @@ export default function MetricTrendChart({
 
   return (
     <div>
-      <div className="mb-1 text-[10px] text-text-muted">Dot size = distance · Line = {MOVING_AVERAGE_WINDOW}-run average</div>
+      <div className="mb-1 flex items-center justify-between text-[10px] text-text-muted">
+        <span />
+        <span
+          className={"font-medium " + (goodDirection == null ? "text-text-muted" : isImproving ? "text-positive" : "text-negative")}
+          title={`${formatShortDate(points[0].d.started_at)} → ${formatShortDate(points[points.length - 1].d.started_at)}`}
+        >
+          {deltaSign}
+          {formatValue(Math.abs(delta))}
+        </span>
+      </div>
       <div className="flex gap-2">
         <div className="relative w-9 shrink-0" style={{ height: CHART_HEIGHT }}>
           {yTicks.map((tick) => (
@@ -143,7 +169,7 @@ export default function MetricTrendChart({
               <path
                 d={trendPath}
                 fill="none"
-                stroke="var(--color-trend-line)"
+                stroke={trendColor}
                 strokeWidth="2"
                 vectorEffect="non-scaling-stroke"
                 strokeLinecap="round"
@@ -171,7 +197,11 @@ export default function MetricTrendChart({
                 hit width (not a % column) since points are time-scaled,
                 not evenly spaced. */}
             {points.map((p, i) => {
-              const color = p.d.activity_type ? TYPE_COLOR[p.d.activity_type] ?? DEFAULT_DOT_COLOR : DEFAULT_DOT_COLOR;
+              const color = getColor
+                ? getColor(p.d)
+                : p.d.activity_type
+                  ? (TYPE_COLOR[p.d.activity_type] ?? DEFAULT_DOT_COLOR)
+                  : DEFAULT_DOT_COLOR;
               return (
                 <div
                   key={p.d.activity_id}
@@ -184,8 +214,8 @@ export default function MetricTrendChart({
                     className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
                     style={{
                       top: `${(p.y / CHART_HEIGHT) * 100}%`,
-                      width: hovered === i ? p.dotPx + 3 : p.dotPx,
-                      height: hovered === i ? p.dotPx + 3 : p.dotPx,
+                      width: hovered === i ? DOT_PX + 3 : DOT_PX,
+                      height: hovered === i ? DOT_PX + 3 : DOT_PX,
                       backgroundColor: color,
                       opacity: hovered === i ? 1 : 0.85,
                       boxShadow: "0 0 0 2px var(--color-surface)",

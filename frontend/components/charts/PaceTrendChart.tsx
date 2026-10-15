@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { monthLabel, movingAverage, niceTicks, shiftMonths, smoothPath, startOfMonth } from "@/components/charts/trendMath";
+import { linearRegressionLine, monthLabel, niceTicks, shiftMonths, smoothPath, startOfMonth } from "@/components/charts/trendMath";
 import { formatPace, formatShortDate } from "@/lib/format";
 
 export interface PaceTrendPoint {
@@ -16,9 +16,7 @@ export interface PaceTrendPoint {
 const CHART_HEIGHT = 160;
 const TOP = 12;
 const BOTTOM = CHART_HEIGHT - 20;
-const MOVING_AVERAGE_WINDOW = 5;
-const MIN_DOT_PX = 5;
-const MAX_DOT_PX = 12;
+const DOT_PX = 8;
 
 const TYPE_COLOR: Record<string, string> = {
   running: "var(--color-stat-runs)",
@@ -30,13 +28,28 @@ const TYPE_LABEL: Record<string, string> = {
 };
 const DEFAULT_DOT_COLOR = "var(--color-text-muted)";
 
-/** Scatter of individual runs (dot size = distance, color = outdoor vs
- * treadmill) plus a smooth moving-average trend curve, x-axis a real
+/** "-0:18/km" / "+0:05/km" -- signed pace delta, same m:ss shape as
+ * formatPace but handling the sign itself (formatPace assumes a
+ * positive absolute pace). */
+function formatPaceDelta(deltaSPerKm: number): string {
+  const sign = deltaSPerKm > 0 ? "+" : deltaSPerKm < 0 ? "-" : "";
+  const abs = Math.abs(deltaSPerKm);
+  const minutes = Math.floor(abs / 60);
+  const seconds = Math.round(abs % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${sign}${minutes}:${seconds}/km`;
+}
+
+/** Scatter of individual runs (fixed dot size, color = outdoor vs
+ * treadmill) plus a straight least-squares trend line, x-axis a real
  * calendar timeline over the last `months` months -- matches how far
  * back GET /api/analytics/pace-trend?months= actually queries
  * (AEROBIC_BASE runs only, see analytics_service.get_pace_trend). Y is
  * deliberately scaled so a *faster* (lower s/km) pace sits higher on
- * the chart -- "the line going up" then reads as "getting faster". */
+ * the chart -- "the line going up" then reads as "getting faster". The
+ * trend line itself is colored by whether pace improved (green) or
+ * worsened (red) first-run to last-run, with the raw delta as a label. */
 export default function PaceTrendChart({ data, months = 6 }: { data: PaceTrendPoint[]; months?: number }) {
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -52,11 +65,6 @@ export default function PaceTrendChart({ data, months = 6 }: { data: PaceTrendPo
   // Low pace (fast) -> small y (top); "faster ↑" reads correctly.
   const yForValue = (v: number) => TOP + ((v - domainMin) / paceSpan) * (BOTTOM - TOP);
 
-  const distances = data.map((d) => d.distance_km);
-  const minDist = Math.min(...distances);
-  const maxDist = Math.max(...distances);
-  const distSpan = maxDist - minDist || 1;
-
   const domainStart = shiftMonths(startOfMonth(new Date()), -(months - 1)).getTime();
   const domainEnd = Date.now();
   const domainSpan = domainEnd - domainStart || 1;
@@ -64,13 +72,17 @@ export default function PaceTrendChart({ data, months = 6 }: { data: PaceTrendPo
   const points = data.map((d) => {
     const t = new Date(d.started_at).getTime();
     const x = Math.min(100, Math.max(0, ((t - domainStart) / domainSpan) * 100));
-    const dotPx = MIN_DOT_PX + ((d.distance_km - minDist) / distSpan) * (MAX_DOT_PX - MIN_DOT_PX);
-    return { x, y: yForValue(d.avg_pace_s_per_km), dotPx, d };
+    return { x, y: yForValue(d.avg_pace_s_per_km), d };
   });
 
-  const maValues = movingAverage(paces, MOVING_AVERAGE_WINDOW);
-  const maPoints = points.map((p, i) => ({ x: p.x, y: yForValue(maValues[i]) }));
-  const trendPath = smoothPath(maPoints);
+  const trendPath = smoothPath(linearRegressionLine(points));
+
+  // Separate regression in raw value-space (not pixel-space) just to
+  // read off the fitted first-run -> last-run change.
+  const trendValueLine = linearRegressionLine(points.map((p) => ({ x: p.x, y: p.d.avg_pace_s_per_km })));
+  const paceDelta = trendValueLine[trendValueLine.length - 1].y - trendValueLine[0].y;
+  const isImproving = paceDelta <= 0; // lower pace = faster = better
+  const trendColor = isImproving ? "var(--color-positive)" : "var(--color-negative)";
 
   const monthTicks = Array.from({ length: months }, (_, i) => {
     const d = shiftMonths(startOfMonth(new Date()), -(months - 1) + i);
@@ -81,8 +93,13 @@ export default function PaceTrendChart({ data, months = 6 }: { data: PaceTrendPo
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-[10px] text-text-muted">
-        <span>Dot size = distance · Line = {MOVING_AVERAGE_WINDOW}-run average</span>
-        <span>faster ↑</span>
+        <span />
+        <span
+          className={"font-medium " + (isImproving ? "text-positive" : "text-negative")}
+          title={`${formatShortDate(data[0].started_at)} → ${formatShortDate(data[data.length - 1].started_at)}`}
+        >
+          {formatPaceDelta(paceDelta)}
+        </span>
       </div>
       <div className="flex gap-2">
         <div className="relative w-11 shrink-0" style={{ height: CHART_HEIGHT }}>
@@ -131,7 +148,7 @@ export default function PaceTrendChart({ data, months = 6 }: { data: PaceTrendPo
               <path
                 d={trendPath}
                 fill="none"
-                stroke="var(--color-trend-line)"
+                stroke={trendColor}
                 strokeWidth="2"
                 vectorEffect="non-scaling-stroke"
                 strokeLinecap="round"
@@ -172,8 +189,8 @@ export default function PaceTrendChart({ data, months = 6 }: { data: PaceTrendPo
                     className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
                     style={{
                       top: `${(p.y / CHART_HEIGHT) * 100}%`,
-                      width: hovered === i ? p.dotPx + 3 : p.dotPx,
-                      height: hovered === i ? p.dotPx + 3 : p.dotPx,
+                      width: hovered === i ? DOT_PX + 3 : DOT_PX,
+                      height: hovered === i ? DOT_PX + 3 : DOT_PX,
                       backgroundColor: color,
                       opacity: hovered === i ? 1 : 0.85,
                       boxShadow: "0 0 0 2px var(--color-surface)",

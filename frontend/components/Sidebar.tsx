@@ -11,16 +11,16 @@ import {
   FlagIcon,
   HomeIcon,
   LogoutIcon,
-  TrendingUpIcon,
   UserIcon,
+  VideoIcon,
 } from "@/components/icons";
 
 const NAV_ITEMS: { href: string; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { href: "/dashboard", label: "Dashboard", icon: HomeIcon },
   { href: "/activities", label: "Activities", icon: ActivityListIcon },
   { href: "/analytics", label: "Analytics", icon: BarChartIcon },
-  { href: "/predictions", label: "Predictions", icon: TrendingUpIcon },
   { href: "/race", label: "Race", icon: FlagIcon },
+  { href: "/video-analysis", label: "Video Analysis", icon: VideoIcon },
   { href: "/coach", label: "Coach", icon: ChatIcon },
   { href: "/profile", label: "Profile", icon: UserIcon },
 ];
@@ -40,7 +40,7 @@ export default function Sidebar() {
         <Link
           href="/dashboard"
           aria-label="RunIQ home"
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-brand text-sm font-bold text-white"
+          className="flex h-[38px] w-[38px] items-center justify-center rounded-[11px] bg-[linear-gradient(135deg,#a27bff,#ff4d8d_55%,#ffb938)] text-xs font-bold text-white shadow-[0_6px_20px_rgba(255,77,141,0.4)]"
         >
           RQ
         </Link>
@@ -56,9 +56,9 @@ export default function Sidebar() {
                 aria-label={label}
                 aria-current={active ? "page" : undefined}
                 className={
-                  "flex h-11 w-11 items-center justify-center rounded-2xl transition-colors " +
+                  "flex h-[42px] w-[42px] items-center justify-center rounded-[11px] transition-colors " +
                   (active
-                    ? "bg-brand text-white"
+                    ? "bg-violet/15 text-[#c9b6ff] shadow-[inset_0_0_0_1px_var(--color-border-strong)]"
                     : "text-text-muted hover:bg-surface-hover hover:text-text")
                 }
               >

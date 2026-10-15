@@ -9,6 +9,7 @@ interface StatCardProps {
   value?: string; // "--" (default) while loading/unavailable -- see label comment below
   deltaPct?: number | null; // week-over-week change, e.g. 12.5 == +12.5%. undefined/null hides the row.
   deltaLabel?: string; // what the delta compares, e.g. "vs last week"
+  compact?: boolean; // slim single-row variant for secondary stats
 }
 
 /**
@@ -25,9 +26,32 @@ export default function StatCard({
   value = "--",
   deltaPct,
   deltaLabel = "vs last week",
+  compact = false,
 }: StatCardProps) {
   const hasDelta = deltaPct != null && Number.isFinite(deltaPct);
   const isPositive = hasDelta && deltaPct! >= 0;
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3">
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${colorClassName}`}>
+          <Icon className="h-4 w-4 text-white" />
+        </div>
+        <span className="flex-1 text-sm text-text-muted">{label}</span>
+        <span className="text-base font-semibold tabular-nums text-text">{value}</span>
+        {hasDelta && (
+          <span
+            className={"flex items-center gap-0.5 text-xs font-medium " + (isPositive ? "text-positive" : "text-negative")}
+            title={deltaLabel}
+          >
+            {isPositive ? <TrendUpIcon className="h-3 w-3" /> : <TrendDownIcon className="h-3 w-3" />}
+            {isPositive ? "+" : ""}
+            {deltaPct!.toFixed(0)}%
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-5">

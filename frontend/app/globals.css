@@ -3,30 +3,40 @@
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
-  /* Dark dashboard palette */
-  --color-bg: #0f1117;
-  --color-surface: #191c26;
-  --color-surface-hover: #20242f;
-  --color-border: #262a38;
+  /* Dark dashboard palette (from frontend_design.html) */
+  --color-bg: #0a0918;
+  --color-surface: #15142a;
+  --color-surface-hover: #1c1b36;
+  --color-border: #26244a;
+  --color-border-strong: #36335f;
 
-  --color-text: #f5f5f7;
-  --color-text-muted: #8b8f9c;
+  --color-text: #ffffff;
+  --color-text-soft: #cfccf0;
+  --color-text-muted: #9a95c4;
 
-  --color-brand: #ec4470;
-  --color-brand-soft: #ec447026;
+  --color-brand: #ff4d8d;
+  --color-brand-soft: #ff4d8d26;
 
-  --color-stat-runs: #ec4470;
-  --color-stat-distance: #22c55e;
-  --color-stat-time: #a855f7;
-  --color-stat-energy: #f97316;
-  --color-mileage: #f2b84b;
-  --color-trend-line: #ef4444;
+  --color-stat-runs: #ff4d8d;
+  --color-stat-distance: #b6f35a;
+  --color-stat-time: #a27bff;
+  --color-stat-energy: #ff7a45;
+  --color-mileage: #ffb938;
+  --color-trend-line: #ff4d8d;
 
-  --color-positive: #22c55e;
-  --color-negative: #f97316;
+  --color-violet: #a27bff;
+  --color-blue: #38d6ff;
+  --color-amber: #ffb938;
+
+  --color-positive: #b6f35a;
+  --color-negative: #ff7a45;
 }
 
 body {
-  background: var(--color-bg);
+  background:
+    radial-gradient(900px 500px at 10% -10%, rgba(162, 123, 255, 0.1), transparent 60%),
+    var(--color-bg);
+  background-attachment: fixed;
   color: var(--color-text);
+  font-feature-settings: "tnum" 1, "cv11" 1;
 }

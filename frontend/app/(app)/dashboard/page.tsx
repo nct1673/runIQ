@@ -1,59 +1,38 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import Card, { EmptyPlaceholder } from "@/components/Card";
-import MetricTrendChart, { BiomechanicsTrendPoint } from "@/components/charts/MetricTrendChart";
 import MonthlyMileageChart, { MonthlyMileagePoint } from "@/components/charts/MonthlyMileageChart";
-import PaceTrendChart, { PaceTrendPoint } from "@/components/charts/PaceTrendChart";
 import WeeklyMileageChart, { WeeklyMileagePoint } from "@/components/charts/WeeklyMileageChart";
 import Header, { HeaderIconButton } from "@/components/Header";
-import {
-  BellIcon,
-  BoltIcon,
-  ChevronDownIcon,
-  ClockIcon,
-  DotsIcon,
-  RefreshIcon,
-  SwapIcon,
-  TrendingUpIcon,
-} from "@/components/icons";
-import MiniCalendar, { RunDay } from "@/components/MiniCalendar";
-import StatCard from "@/components/StatCard";
-import { formatDuration, formatPace, formatTotalDuration } from "@/lib/format";
+import { BellIcon, RefreshIcon, SwapIcon } from "@/components/icons";
+import ConsistencyCard, { weeksStreak } from "@/components/ConsistencyCard";
+import FitnessSnapshotCard from "@/components/FitnessSnapshotCard";
+import KpiCard, { Delta } from "@/components/KpiCard";
+import LatestRunCard, { LatestRunActivity } from "@/components/LatestRunCard";
+import NextRaceCard from "@/components/NextRaceCard";
+import WeekStripCard from "@/components/WeekStripCard";
 
 interface Summary {
-  total_runs: number;
-  total_distance_km: number;
-  total_duration_s: number;
-  avg_pace_s_per_km: number | null;
-  distance_delta_pct: number | null;
+  vo2_max: number | null;
+  vo2max_delta_pct: number | null;
 }
 
-interface ActivityDate {
-  id: string;
-  started_at: string;
+// /api/activities rows: enough for the calendar (date + distance) and the Latest Run card.
+type ActivityRow = LatestRunActivity;
+
+interface RaceListItem {
+  name: string;
   distance_km: number;
+  race_date: string; // "YYYY-MM-DD"
 }
-
-interface Prediction {
-  distance_label: string;
-  predicted_time_s: number;
-}
-
-const PREDICTOR_DISTANCES: { label: string; distance_label: string }[] = [
-  { label: "5K", distance_label: "5K" },
-  { label: "10K", distance_label: "10K" },
-  { label: "Half", distance_label: "half_marathon" },
-];
 
 /**
- * Blueprint §10: "what is happening to my running?" overview. Every card
- * here is wired to real `activities`-table aggregates (see
- * app/services/analytics_service.py). Time Predictor is the one
- * exception -- it's Garmin's own race predictor (see
- * app/services/prediction_service.py), a stopgap until RunIQ's own
- * model (app/ml/) exists.
+ * Blueprint §10 high-level overview. Every card here is wired to real
+ * `activities`-table aggregates (see app/services/analytics_service.py).
+ * The dot-scatter trend charts (pace + biomechanics) and Personal Records
+ * live on /analytics instead of here.
  */
 export default function DashboardPage() {
   const [displayName, setDisplayName] = useState<string | null>(null);
@@ -61,10 +40,8 @@ export default function DashboardPage() {
   const [weeklyMileage, setWeeklyMileage] = useState<WeeklyMileagePoint[] | null>(null);
   const [monthlyMileage, setMonthlyMileage] = useState<MonthlyMileagePoint[] | null>(null);
   const [mileageView, setMileageView] = useState<"weekly" | "monthly">("weekly");
-  const [paceTrend, setPaceTrend] = useState<PaceTrendPoint[] | null>(null);
-  const [biomechanicsTrend, setBiomechanicsTrend] = useState<BiomechanicsTrendPoint[] | null>(null);
-  const [activityDates, setActivityDates] = useState<ActivityDate[] | null>(null);
-  const [predictions, setPredictions] = useState<Prediction[] | null>(null);
+  const [activityDates, setActivityDates] = useState<ActivityRow[] | null>(null);
+  const [races, setRaces] = useState<RaceListItem[] | null>(null);
   const [updating, setUpdating] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
 
@@ -84,25 +61,15 @@ export default function DashboardPage() {
       .then(setMonthlyMileage)
       .catch(() => setMonthlyMileage(null));
 
-    fetch("/api/analytics/pace-trend?months=6")
-      .then((res) => (res.ok ? res.json() : null))
-      .then(setPaceTrend)
-      .catch(() => setPaceTrend(null));
-
-    fetch("/api/analytics/biomechanics-trend?months=6")
-      .then((res) => (res.ok ? res.json() : null))
-      .then(setBiomechanicsTrend)
-      .catch(() => setBiomechanicsTrend(null));
-
     fetch("/api/activities")
       .then((res) => (res.ok ? res.json() : null))
       .then(setActivityDates)
       .catch(() => setActivityDates(null));
 
-    fetch("/api/predictions")
+    fetch("/api/races")
       .then((res) => (res.ok ? res.json() : null))
-      .then(setPredictions)
-      .catch(() => setPredictions(null));
+      .then(setRaces)
+      .catch(() => setRaces(null));
   }
 
   useEffect(() => {
@@ -122,6 +89,18 @@ export default function DashboardPage() {
       const res = await fetch("/api/activities/sync-garmin", { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       loadDashboardData(); // reflect the new activities everywhere right away
+
+      // Personal records are a separate Garmin sync, kept in its own
+      // try/catch so a failure here doesn't mask the activities sync
+      // having already succeeded. No card on this page to refresh
+      // anymore (moved to /analytics) -- this just keeps the data
+      // fresh for whenever that page is next opened.
+      try {
+        const prRes = await fetch("/api/personal-records/sync", { method: "POST" });
+        if (!prRes.ok) throw new Error(await prRes.text());
+      } catch (prErr) {
+        setUpdateStatus(`Activities updated, but personal records sync failed: ${(prErr as Error).message}`);
+      }
     } catch (err) {
       setUpdateStatus(`Update failed: ${(err as Error).message}`);
     } finally {
@@ -129,192 +108,175 @@ export default function DashboardPage() {
     }
   }
 
-  const runsByDate = useMemo(() => {
-    const map = new Map<string, RunDay>();
-    for (const a of activityDates ?? []) {
-      const key = a.started_at.slice(0, 10); // "YYYY-MM-DD" prefix of the ISO timestamp
-      const entry = map.get(key) ?? { count: 0, distance_km: 0 };
-      entry.count += 1;
-      entry.distance_km += a.distance_km;
-      map.set(key, entry);
-    }
-    return map;
-  }, [activityDates]);
+  const now = new Date();
+  const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening";
+  const eyebrow = now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+
+  // ---- derived display numbers (all from the endpoints already loaded) ----
+  const thisWeek = weeklyMileage?.[weeklyMileage.length - 1];
+  const lastWeek = weeklyMileage && weeklyMileage.length > 1 ? weeklyMileage[weeklyMileage.length - 2] : undefined;
+  const weekDiffKm = thisWeek && lastWeek ? thisWeek.distance_km - lastWeek.distance_km : null;
+
+  const thisMonth = monthlyMileage?.[monthlyMileage.length - 1];
+  const lastMonth = monthlyMileage && monthlyMileage.length > 1 ? monthlyMileage[monthlyMileage.length - 2] : undefined;
+  const monthDiffPct =
+    thisMonth && lastMonth && lastMonth.distance_km > 0
+      ? ((thisMonth.distance_km - lastMonth.distance_km) / lastMonth.distance_km) * 100
+      : null;
+  const daysInThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+  const yearToDateKm = monthlyMileage
+    ? monthlyMileage
+        .filter((m) => m.month_start.startsWith(String(now.getFullYear())))
+        .reduce((sum, m) => sum + m.distance_km, 0)
+    : null;
+
+  const streak = weeksStreak(weeklyMileage);
+
+  const paced = (activityDates ?? []).filter((a) => a.avg_pace_s_per_km != null);
+  const mean = (rows: ActivityRow[]) =>
+    rows.length ? rows.reduce((sum, a) => sum + (a.avg_pace_s_per_km as number), 0) / rows.length : null;
+  const recentPace = mean(paced.slice(0, 5));
+  const priorPace = mean(paced.slice(5, 10));
+  const paceDeltaS = recentPace != null && priorPace != null ? recentPace - priorPace : null;
+
+  const completedWeeks = weeklyMileage && weeklyMileage.length > 1 ? weeklyMileage.slice(-5, -1) : [];
+  const avgWeeklyKm = completedWeeks.length
+    ? completedWeeks.reduce((sum, w) => sum + w.distance_km, 0) / completedWeeks.length
+    : null;
+
+  const cutoff = Date.now() - 90 * 86_400_000;
+  const recentDistances = (activityDates ?? []).filter((a) => new Date(a.started_at).getTime() >= cutoff).map((a) => a.distance_km);
+  const longestRunKm = recentDistances.length ? Math.max(...recentDistances) : null;
+  const peakMonthKm = monthlyMileage && monthlyMileage.length ? Math.max(...monthlyMileage.map((m) => m.distance_km)) : null;
 
   return (
     <div>
-      <Header
-        title={`Welcome, ${displayName || "Runner"}`}
-        subtitle="Here's what's happening with your training."
-      >
+      <Header title={`${greeting}, ${displayName || "Runner"}`} eyebrow={eyebrow}>
         <button
           type="button"
           onClick={handleUpdateData}
           disabled={updating}
-          className="flex w-[160px] items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-75"
+          className="flex h-[38px] items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border border-border bg-surface px-3.5 text-[13px] font-medium text-text-soft hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-75"
         >
-          <RefreshIcon className={"h-4 w-4 shrink-0" + (updating ? " animate-spin" : "")} />
-          {updating ? "Updating..." : "Update Data"}
-        </button>
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm text-text"
-        >
-          Last 30 days
-          <ChevronDownIcon className="h-4 w-4 text-text-muted" />
+          <RefreshIcon className={"h-[15px] w-[15px] shrink-0" + (updating ? " animate-spin" : "")} />
+          {updating ? "Syncing..." : "Sync"}
         </button>
         <HeaderIconButton label="Notifications">
           <BellIcon className="h-5 w-5" />
-        </HeaderIconButton>
-        <HeaderIconButton label="More">
-          <DotsIcon className="h-5 w-5" />
         </HeaderIconButton>
       </Header>
 
       {updateStatus && <p className="-mt-3 mb-4 text-sm text-text-muted">{updateStatus}</p>}
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card title="Weekly Mileage">
-          <EmptyPlaceholder label="No data" />
-        </Card>
-        <StatCard
-          icon={TrendingUpIcon}
-          colorClassName="bg-stat-distance"
-          label="Total Distance"
-          value={summary ? `${summary.total_distance_km.toFixed(1)} km` : undefined}
-          deltaPct={summary?.distance_delta_pct}
+      {/* Hero: where I'm heading, and how my fitness looks right now. */}
+      <section className="mb-[18px] grid grid-cols-1 gap-[18px] lg:grid-cols-[1.45fr_1fr]">
+        <NextRaceCard longestRunKm={longestRunKm} peakMonthKm={peakMonthKm} />
+        <FitnessSnapshotCard
+          vo2Max={summary?.vo2_max}
+          vo2DeltaPct={summary?.vo2max_delta_pct}
+          avgPaceSPerKm={recentPace}
+          paceDeltaS={paceDeltaS}
+          avgWeeklyKm={avgWeeklyKm}
         />
-        <StatCard
-          icon={ClockIcon}
-          colorClassName="bg-stat-time"
-          label="Total Time"
-          value={summary ? formatTotalDuration(summary.total_duration_s) : undefined}
-        />
-        <StatCard
-          icon={BoltIcon}
-          colorClassName="bg-stat-energy"
-          label="Avg Pace"
-          value={summary?.avg_pace_s_per_km != null ? formatPace(summary.avg_pace_s_per_km) : undefined}
-        />
-      </div>
+      </section>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="flex flex-col gap-4 lg:col-span-2">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Card title="Pace Trend">
-              {paceTrend ? <PaceTrendChart data={paceTrend} months={6} /> : <EmptyPlaceholder label="Loading..." />}
-            </Card>
-            <Card>
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-sm font-medium text-text-muted">
-                  {mileageView === "weekly" ? "Weekly Mileage" : "Monthly Mileage"}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setMileageView((v) => (v === "weekly" ? "monthly" : "weekly"))}
-                  title={`Switch to ${mileageView === "weekly" ? "monthly" : "weekly"} view`}
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted hover:bg-surface-hover hover:text-text"
-                >
-                  <SwapIcon className="h-4 w-4" />
-                </button>
+      {/* KPI row: this week / this month / streak / year to date. */}
+      <section className="mb-[18px] grid grid-cols-1 gap-[18px] sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          accent="#b6f35a"
+          label="This week"
+          hint="Mon-Sun"
+          value={thisWeek ? thisWeek.distance_km.toFixed(1) : "--"}
+          unit="km"
+          footLeft={thisWeek ? `${thisWeek.runs} ${thisWeek.runs === 1 ? "run" : "runs"}` : undefined}
+          footRight={
+            weekDiffKm != null && lastWeek ? (
+              <Delta value={weekDiffKm} text={`${weekDiffKm > 0 ? "+" : weekDiffKm < 0 ? "-" : ""}${Math.abs(weekDiffKm).toFixed(1)} km vs last wk`} />
+            ) : undefined
+          }
+        />
+        <KpiCard
+          accent="#38d6ff"
+          label={now.toLocaleDateString(undefined, { month: "long" })}
+          hint={`${now.getDate()} of ${daysInThisMonth} days`}
+          value={thisMonth ? thisMonth.distance_km.toFixed(1) : "--"}
+          unit="km"
+          footLeft={lastMonth ? `Last month ${lastMonth.distance_km.toFixed(0)} km` : undefined}
+          footRight={
+            monthDiffPct != null ? (
+              <Delta value={monthDiffPct} text={`${monthDiffPct > 0 ? "+" : "-"}${Math.abs(monthDiffPct).toFixed(0)}% vs last month`} />
+            ) : undefined
+          }
+        />
+        <KpiCard
+          accent="#ffb938"
+          label="Streak"
+          hint="Weeks with a run"
+          value={String(streak)}
+          unit={streak === 1 ? "week" : "weeks"}
+          visual={
+            weeklyMileage ? (
+              <div className="flex gap-1">
+                {weeklyMileage.map((w) => (
+                  <i
+                    key={w.week_start}
+                    className={"h-[5px] flex-1 rounded-sm " + (w.runs > 0 ? "bg-[linear-gradient(90deg,#ffb938,#ff7a45)]" : "bg-border")}
+                  />
+                ))}
               </div>
-              {mileageView === "weekly" ? (
-                weeklyMileage ? (
-                  <WeeklyMileageChart data={weeklyMileage} />
-                ) : (
-                  <EmptyPlaceholder label="Loading..." />
-                )
-              ) : monthlyMileage ? (
-                <MonthlyMileageChart data={monthlyMileage} />
+            ) : undefined
+          }
+          footLeft={weeklyMileage ? `Last ${weeklyMileage.length} weeks` : undefined}
+        />
+        <KpiCard
+          accent="#a27bff"
+          label="Year to date"
+          hint={String(now.getFullYear())}
+          value={yearToDateKm != null ? yearToDateKm.toFixed(0) : "--"}
+          unit="km"
+          footLeft="Since 1 Jan"
+        />
+      </section>
+
+      {/* Main grid: trends and last run on the left, habits and the week on the right. */}
+      <section className="grid grid-cols-1 gap-[18px] lg:grid-cols-[1.6fr_1fr]">
+        <div className="flex flex-col gap-[18px]">
+          <Card>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <i className="inline-block h-2 w-2 rounded-full bg-violet" />
+                {mileageView === "weekly" ? "Weekly mileage" : "Monthly mileage"}
+              </div>
+              <button
+                type="button"
+                onClick={() => setMileageView((v) => (v === "weekly" ? "monthly" : "weekly"))}
+                title={`Switch to ${mileageView === "weekly" ? "monthly" : "weekly"} view`}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted hover:bg-surface-hover hover:text-text"
+              >
+                <SwapIcon className="h-4 w-4" />
+              </button>
+            </div>
+            {mileageView === "weekly" ? (
+              weeklyMileage ? (
+                <WeeklyMileageChart data={weeklyMileage} />
               ) : (
                 <EmptyPlaceholder label="Loading..." />
-              )}
-            </Card>
-          </div>
-
-          <Card title="Time Predictor">
-            {predictions && predictions.length > 0 ? (
-              <div className="flex h-full flex-col justify-center gap-4">
-                {PREDICTOR_DISTANCES.map(({ label, distance_label }) => {
-                  const prediction = predictions.find((p) => p.distance_label === distance_label);
-                  return (
-                    <div key={distance_label} className="flex items-center justify-between text-sm">
-                      <span className="text-text-muted">{label}</span>
-                      <span className="font-semibold text-text">
-                        {prediction ? formatDuration(prediction.predicted_time_s) : "--"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              )
+            ) : monthlyMileage ? (
+              <MonthlyMileageChart data={monthlyMileage} />
             ) : (
-              <EmptyPlaceholder label={predictions ? "No prediction yet" : "Loading..."} />
+              <EmptyPlaceholder label="Loading..." />
             )}
           </Card>
+          <LatestRunCard activities={activityDates} />
         </div>
 
-        <Card title="Your Schedule">
-          <MiniCalendar runsByDate={runsByDate} />
-        </Card>
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card title="Cadence">
-          {biomechanicsTrend ? (
-            <MetricTrendChart
-              data={biomechanicsTrend}
-              getValue={(d) => d.avg_cadence}
-              formatValue={(v) => `${Math.round(v)} spm`}
-            />
-          ) : (
-            <EmptyPlaceholder label="Loading..." />
-          )}
-        </Card>
-        <Card title="Stride Length">
-          {biomechanicsTrend ? (
-            <MetricTrendChart
-              data={biomechanicsTrend}
-              getValue={(d) => d.avg_stride_length}
-              formatValue={(v) => `${v.toFixed(1)} cm`}
-            />
-          ) : (
-            <EmptyPlaceholder label="Loading..." />
-          )}
-        </Card>
-        <Card title="Vertical Oscillation">
-          {biomechanicsTrend ? (
-            <MetricTrendChart
-              data={biomechanicsTrend}
-              getValue={(d) => d.avg_vertical_oscillation}
-              formatValue={(v) => `${v.toFixed(1)} cm`}
-            />
-          ) : (
-            <EmptyPlaceholder label="Loading..." />
-          )}
-        </Card>
-        <Card title="Vertical Ratio">
-          {biomechanicsTrend ? (
-            <MetricTrendChart
-              data={biomechanicsTrend}
-              getValue={(d) => d.avg_vertical_ratio}
-              formatValue={(v) => `${v.toFixed(1)}%`}
-            />
-          ) : (
-            <EmptyPlaceholder label="Loading..." />
-          )}
-        </Card>
-        <Card title="Ground Contact Time">
-          {biomechanicsTrend ? (
-            <MetricTrendChart
-              data={biomechanicsTrend}
-              getValue={(d) => d.avg_ground_contact_time}
-              formatValue={(v) => `${Math.round(v)} ms`}
-            />
-          ) : (
-            <EmptyPlaceholder label="Loading..." />
-          )}
-        </Card>
-      </div>
+        <div className="flex flex-col gap-[18px]">
+          <ConsistencyCard weekly={weeklyMileage} />
+          <WeekStripCard runs={activityDates} races={races} />
+        </div>
+      </section>
     </div>
   );
 }
