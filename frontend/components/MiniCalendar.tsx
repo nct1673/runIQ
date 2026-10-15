@@ -2,12 +2,17 @@
 
 import { useMemo, useState } from "react";
 
-import { ChevronLeftIcon, ChevronRightIcon, RunnerIcon } from "@/components/icons";
+import { ChevronLeftIcon, ChevronRightIcon, FlagIcon, RunnerIcon } from "@/components/icons";
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 export interface RunDay {
   count: number;
+  distance_km: number;
+}
+
+export interface RaceDay {
+  name: string;
   distance_km: number;
 }
 
@@ -31,9 +36,18 @@ function dateKey(year: number, month: number, day: number): string {
  * that day's distance, and rolls up into the month summary line below
  * the grid -- real activity history, standing in for the future
  * scheduled-workouts feature (Goals module, not built yet) until that
- * exists.
+ * exists. `racesByDate` (from GET /api/races) rings the day and adds a
+ * flag icon for a planned/completed race -- shown alongside that day's
+ * run distance (not in place of it) so a race day doesn't hide how much
+ * was actually run.
  */
-export default function MiniCalendar({ runsByDate = new Map<string, RunDay>() }: { runsByDate?: Map<string, RunDay> }) {
+export default function MiniCalendar({
+  runsByDate = new Map<string, RunDay>(),
+  racesByDate = new Map<string, RaceDay>(),
+}: {
+  runsByDate?: Map<string, RunDay>;
+  racesByDate?: Map<string, RaceDay>;
+}) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -102,25 +116,34 @@ export default function MiniCalendar({ runsByDate = new Map<string, RunDay>() }:
         ))}
         {cells.map((day, i) => {
           if (day === null) return <div key={`empty-${i}`} />;
-          const entry = runsByDate.get(dateKey(year, month, day));
+          const key = dateKey(year, month, day);
+          const entry = runsByDate.get(key);
+          const race = racesByDate.get(key);
+
+          const titleParts: string[] = [];
+          if (race) titleParts.push(`${race.name} · ${race.distance_km.toFixed(1)} km`);
+          if (entry) titleParts.push(`${entry.distance_km.toFixed(1)} km · ${entry.count} run${entry.count === 1 ? "" : "s"}`);
+
           return (
             <div
               key={day}
               className="flex flex-col items-center gap-0.5 py-0.5"
-              title={entry ? `${entry.distance_km.toFixed(1)} km · ${entry.count} run${entry.count === 1 ? "" : "s"}` : undefined}
+              title={titleParts.length > 0 ? titleParts.join(" · ") : undefined}
             >
               <span
                 className={
                   "flex h-7 w-7 items-center justify-center rounded-full " +
-                  (isToday(day) ? "bg-brand text-white" : "text-text")
+                  (isToday(day) ? "bg-brand text-white" : "text-text") +
+                  (race ? " ring-2 ring-brand ring-offset-2 ring-offset-surface" : "")
                 }
               >
                 {day}
               </span>
-              <div className="flex h-3.5 items-center justify-center gap-0.5 text-stat-distance">
+              <div className={"flex h-3.5 items-center justify-center gap-0.5 " + (race ? "text-brand" : "text-stat-distance")}>
+                {race && <FlagIcon className="h-2.5 w-2.5 shrink-0" />}
                 {entry && (
                   <>
-                    <RunnerIcon className="h-2.5 w-2.5 shrink-0" />
+                    {!race && <RunnerIcon className="h-2.5 w-2.5 shrink-0" />}
                     <span className="text-[9px] font-medium leading-none">{entry.distance_km.toFixed(1)}k</span>
                   </>
                 )}

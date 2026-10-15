@@ -15,6 +15,8 @@ class ActivityOut(BaseModel):
     avg_cadence: float | None = None
     elevation_gain_m: float | None = None
     activity_type: str | None = None
+    # Garmin's per-run VO2max estimate, for the Analytics VO2max trend.
+    vo2_max: float | None = None
 
     # Denormalized from the linked weather_conditions row (absent for
     # treadmill runs -- no GPS to look weather up against). Flattened onto
@@ -22,6 +24,13 @@ class ActivityOut(BaseModel):
     # needs a handful of fields per card, not the full WeatherCondition.
     temperature_c: float | None = None
     weather_condition: str | None = None
+
+    # Time in each HR zone (seconds), for the card's zone strip.
+    hr_time_in_zone_1: float | None = None
+    hr_time_in_zone_2: float | None = None
+    hr_time_in_zone_3: float | None = None
+    hr_time_in_zone_4: float | None = None
+    hr_time_in_zone_5: float | None = None
 
     model_config = {"from_attributes": True}
 

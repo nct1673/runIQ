@@ -55,8 +55,14 @@ def list_activities(db: Session = Depends(get_db)) -> list[ActivityOut]:
             avg_cadence=activity.avg_cadence,
             elevation_gain_m=activity.elevation_gain_m,
             activity_type=activity.activity_type,
+            vo2_max=activity.vo2_max,
             temperature_c=weather.temperature_c if weather else None,
             weather_condition=weather.condition if weather else None,
+            hr_time_in_zone_1=activity.hr_time_in_zone_1,
+            hr_time_in_zone_2=activity.hr_time_in_zone_2,
+            hr_time_in_zone_3=activity.hr_time_in_zone_3,
+            hr_time_in_zone_4=activity.hr_time_in_zone_4,
+            hr_time_in_zone_5=activity.hr_time_in_zone_5,
         )
         for activity, weather in rows
     ]

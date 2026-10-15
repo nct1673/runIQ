@@ -1,7 +1,8 @@
-/** Shared math for the dot-scatter + moving-average trend charts
- * (PaceTrendChart, MetricTrendChart) -- calendar-month helpers, a
- * trailing simple moving average, and Catmull-Rom cubic-bezier
- * smoothing so the trend line reads as a continuous curve. */
+/** Shared math for the dot-scatter trend charts (PaceTrendChart,
+ * MetricTrendChart) -- calendar-month helpers, an ordinary-least-squares
+ * line fit, and Catmull-Rom cubic-bezier smoothing (also doubles as a
+ * straight-line path for exactly 2 points, which is all the regression
+ * line ever passes it). */
 
 export function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -15,15 +16,39 @@ export function monthLabel(d: Date): string {
   return d.toLocaleDateString(undefined, { month: "short" });
 }
 
-/** Trailing simple moving average, window `n` (fewer points at the
- * start use however many are available, same convention as most
- * charting libraries' "MA5"). */
-export function movingAverage(values: number[], n: number): number[] {
-  return values.map((_, i) => {
-    const start = Math.max(0, i - n + 1);
-    const slice = values.slice(start, i + 1);
-    return slice.reduce((sum, v) => sum + v, 0) / slice.length;
-  });
+/** Ordinary-least-squares line through `pts`, returned as its two
+ * endpoints at pts' min/max x -- feed straight into smoothPath (or any
+ * 2-point path builder) for a straight trend line. Computed directly in
+ * whatever coordinate space `pts` is already in (e.g. pixel space),
+ * which is valid since a linear fit commutes with the linear x/y-value
+ * -> pixel scaling the caller already applied. */
+export function linearRegressionLine(pts: { x: number; y: number }[]): { x: number; y: number }[] {
+  if (pts.length === 0) return [];
+  if (pts.length === 1) return [pts[0], pts[0]];
+
+  const n = pts.length;
+  let sumX = 0;
+  let sumY = 0;
+  let sumXY = 0;
+  let sumXX = 0;
+  for (const p of pts) {
+    sumX += p.x;
+    sumY += p.y;
+    sumXY += p.x * p.y;
+    sumXX += p.x * p.x;
+  }
+  const denom = n * sumXX - sumX * sumX;
+  const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+  const intercept = (sumY - slope * sumX) / n;
+
+  const xs = pts.map((p) => p.x);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+
+  return [
+    { x: minX, y: slope * minX + intercept },
+    { x: maxX, y: slope * maxX + intercept },
+  ];
 }
 
 function niceNumber(range: number, round: boolean): number {

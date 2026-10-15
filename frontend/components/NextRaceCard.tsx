@@ -65,29 +65,8 @@ function useCountdown(raceDate: string | undefined, raceTime: string | null | un
   };
 }
 
-function Mini({ label, value, unit, note }: { label: string; value: string; unit?: string; note?: string }) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-bg/35 px-3.5 py-3">
-      <div className="text-[11px] uppercase tracking-wider text-text-soft">{label}</div>
-      <div className="mb-0.5 mt-1.5 text-lg font-semibold">
-        {value}
-        {unit && <span className="ml-1 text-xs font-medium text-text-muted">{unit}</span>}
-      </div>
-      {note && <div className="text-xs text-text-muted">{note}</div>}
-    </div>
-  );
-}
-
-/** Hero card: the next upcoming race, with a live countdown. `longestRunKm`
- * and `peakMonthKm` (both optional) are shown as supporting context so the
- * hero answers "am I ready?" rather than just "how long?". */
-export default function NextRaceCard({
-  longestRunKm,
-  peakMonthKm,
-}: {
-  longestRunKm?: number | null;
-  peakMonthKm?: number | null;
-}) {
+/** Hero card: the next upcoming race, with a live countdown. */
+export default function NextRaceCard() {
   const [races, setRaces] = useState<Race[] | null>(null);
 
   useEffect(() => {
@@ -105,7 +84,13 @@ export default function NextRaceCard({
   const targetPace = next && next.goal_time_s != null ? next.goal_time_s / next.distance_km : null;
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-violet/30 bg-[radial-gradient(560px_300px_at_100%_0%,rgba(255,77,141,0.2),transparent_65%),radial-gradient(560px_300px_at_0%_0%,rgba(122,92,255,0.24),transparent_65%),#17143a] p-7 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+    <div
+      className="relative flex flex-col overflow-hidden rounded-2xl border border-violet/30 px-6 py-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)]"
+      style={{
+        background:
+          "radial-gradient(560px 300px at 100% 0%, rgba(255,77,141,0.2), transparent 65%), radial-gradient(560px 300px at 0% 0%, rgba(122,92,255,0.24), transparent 65%), #17143a",
+      }}
+    >
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white">
           <FlagIcon className="h-3 w-3" />
@@ -126,32 +111,34 @@ export default function NextRaceCard({
         </div>
       ) : (
         <>
-          <div className="mb-1.5 mt-3.5 truncate text-[28px] font-semibold tracking-tight">{next.name}</div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-text-soft">
-            <span>
-              {distanceLabel(next.distance_km)}
-              {KNOWN_DISTANCES.every(([d]) => Math.abs(d - next.distance_km) >= 0.05) ? "" : ` · ${next.distance_km.toFixed(1)} km`}
-            </span>
-            {next.location && <span>{next.location}</span>}
-            <span>
-              {new Date(next.race_date + "T00:00:00").toLocaleDateString(undefined, {
-                weekday: "short",
-                day: "numeric",
-                month: "short",
-              })}
-              {next.race_time
-                ? ` · ${new Date(`2000-01-01T${next.race_time}`).toLocaleTimeString(undefined, {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}`
-                : ""}
-            </span>
-          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            <div className="min-w-0">
+              <div className="mb-1 truncate text-2xl font-semibold tracking-tight">{next.name}</div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-text-soft">
+                <span>
+                  {distanceLabel(next.distance_km)}
+                  {KNOWN_DISTANCES.every(([d]) => Math.abs(d - next.distance_km) >= 0.05) ? "" : ` · ${next.distance_km.toFixed(1)} km`}
+                </span>
+                {next.location && <span>{next.location}</span>}
+                <span>
+                  {new Date(next.race_date + "T00:00:00").toLocaleDateString(undefined, {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                  })}
+                  {next.race_time
+                    ? ` · ${new Date(`2000-01-01T${next.race_time}`).toLocaleTimeString(undefined, {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}`
+                    : ""}
+                </span>
+              </div>
+            </div>
 
-          <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
             {countdown && !countdown.isPast ? (
               <div className="flex items-baseline gap-1.5">
-                <span className="text-[72px] font-semibold leading-[0.9] tracking-tighter text-white sm:text-[88px]">
+                <span className="text-[52px] font-semibold leading-none tracking-tighter text-white">
                   {countdown.days}
                 </span>
                 <span className="text-base text-text-soft">{countdown.days === 1 ? "day" : "days"}</span>
@@ -162,34 +149,20 @@ export default function NextRaceCard({
             ) : (
               <div className="rounded-xl bg-brand-soft px-4 py-3 text-lg font-semibold text-brand">Race day is here</div>
             )}
-
-            {next.goal_time_s != null && (
-              <div className="flex gap-7 text-right">
-                <div>
-                  <div className="mb-1 text-[11px] uppercase tracking-wider text-text-muted">Goal time</div>
-                  <div className="text-2xl font-semibold">{formatDuration(next.goal_time_s)}</div>
-                </div>
-                {targetPace != null && (
-                  <div>
-                    <div className="mb-1 text-[11px] uppercase tracking-wider text-text-muted">Target pace</div>
-                    <div className="text-2xl font-semibold">{formatPace(targetPace)}</div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
-          {(longestRunKm != null || peakMonthKm != null) && (
-            <div className="mt-6 grid grid-cols-2 gap-2.5">
-              {longestRunKm != null && (
-                <Mini
-                  label="Longest run"
-                  value={longestRunKm.toFixed(1)}
-                  unit="km"
-                  note={`${Math.round((longestRunKm / next.distance_km) * 100)}% of race distance`}
-                />
+          {next.goal_time_s != null && (
+            <div className="mt-3 flex gap-7">
+              <div>
+                <div className="mb-1 text-[11px] uppercase tracking-wider text-text-muted">Goal time</div>
+                <div className="text-xl font-semibold">{formatDuration(next.goal_time_s)}</div>
+              </div>
+              {targetPace != null && (
+                <div>
+                  <div className="mb-1 text-[11px] uppercase tracking-wider text-text-muted">Target pace</div>
+                  <div className="text-xl font-semibold">{formatPace(targetPace)}</div>
+                </div>
               )}
-              {peakMonthKm != null && <Mini label="Peak month" value={peakMonthKm.toFixed(0)} unit="km" note="Last 12 months" />}
             </div>
           )}
         </>

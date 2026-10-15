@@ -7,7 +7,7 @@ import MonthlyMileageChart, { MonthlyMileagePoint } from "@/components/charts/Mo
 import WeeklyMileageChart, { WeeklyMileagePoint } from "@/components/charts/WeeklyMileageChart";
 import Header, { HeaderIconButton } from "@/components/Header";
 import { BellIcon, RefreshIcon, SwapIcon } from "@/components/icons";
-import ConsistencyCard, { weeksStreak } from "@/components/ConsistencyCard";
+import { weeksStreak } from "@/components/ConsistencyCard";
 import FitnessSnapshotCard from "@/components/FitnessSnapshotCard";
 import KpiCard, { Delta } from "@/components/KpiCard";
 import LatestRunCard, { LatestRunActivity } from "@/components/LatestRunCard";
@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const [monthlyMileage, setMonthlyMileage] = useState<MonthlyMileagePoint[] | null>(null);
   const [mileageView, setMileageView] = useState<"weekly" | "monthly">("weekly");
   const [activityDates, setActivityDates] = useState<ActivityRow[] | null>(null);
+  const [easyRuns, setEasyRuns] = useState<{ avg_pace_s_per_km: number }[] | null>(null);
   const [races, setRaces] = useState<RaceListItem[] | null>(null);
   const [updating, setUpdating] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
@@ -50,6 +51,12 @@ export default function DashboardPage() {
       .then((res) => (res.ok ? res.json() : null))
       .then(setSummary)
       .catch(() => setSummary(null));
+
+    // Easy runs (Garmin AEROBIC_BASE) from the last 2 months, oldest first.
+    fetch("/api/analytics/pace-trend?months=2")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setEasyRuns)
+      .catch(() => setEasyRuns(null));
 
     fetch("/api/analytics/weekly-mileage?weeks=10")
       .then((res) => (res.ok ? res.json() : null))
@@ -133,22 +140,15 @@ export default function DashboardPage() {
 
   const streak = weeksStreak(weeklyMileage);
 
-  const paced = (activityDates ?? []).filter((a) => a.avg_pace_s_per_km != null);
-  const mean = (rows: ActivityRow[]) =>
-    rows.length ? rows.reduce((sum, a) => sum + (a.avg_pace_s_per_km as number), 0) / rows.length : null;
-  const recentPace = mean(paced.slice(0, 5));
-  const priorPace = mean(paced.slice(5, 10));
-  const paceDeltaS = recentPace != null && priorPace != null ? recentPace - priorPace : null;
+  // Easy-run pace: mean over the last 2 months of easy runs.
+  const easyPaces = (easyRuns ?? []).map((r) => r.avg_pace_s_per_km);
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((sum, x) => sum + x, 0) / xs.length : null);
+  const easyPace = mean(easyPaces);
 
   const completedWeeks = weeklyMileage && weeklyMileage.length > 1 ? weeklyMileage.slice(-5, -1) : [];
   const avgWeeklyKm = completedWeeks.length
     ? completedWeeks.reduce((sum, w) => sum + w.distance_km, 0) / completedWeeks.length
     : null;
-
-  const cutoff = Date.now() - 90 * 86_400_000;
-  const recentDistances = (activityDates ?? []).filter((a) => new Date(a.started_at).getTime() >= cutoff).map((a) => a.distance_km);
-  const longestRunKm = recentDistances.length ? Math.max(...recentDistances) : null;
-  const peakMonthKm = monthlyMileage && monthlyMileage.length ? Math.max(...monthlyMileage.map((m) => m.distance_km)) : null;
 
   return (
     <div>
@@ -169,74 +169,72 @@ export default function DashboardPage() {
 
       {updateStatus && <p className="-mt-3 mb-4 text-sm text-text-muted">{updateStatus}</p>}
 
-      {/* Hero: where I'm heading, and how my fitness looks right now. */}
-      <section className="mb-[18px] grid grid-cols-1 gap-[18px] lg:grid-cols-[1.45fr_1fr]">
-        <NextRaceCard longestRunKm={longestRunKm} peakMonthKm={peakMonthKm} />
+      {/* Hero: where I'm heading and this period's totals, beside how my fitness looks right now. */}
+      <section className="mb-[18px] grid grid-cols-1 gap-[18px] lg:grid-cols-[7fr_3fr]">
+        <NextRaceCard />
         <FitnessSnapshotCard
           vo2Max={summary?.vo2_max}
-          vo2DeltaPct={summary?.vo2max_delta_pct}
-          avgPaceSPerKm={recentPace}
-          paceDeltaS={paceDeltaS}
+          easyPaceSPerKm={easyPace}
+          easyRunCount={easyPaces.length}
           avgWeeklyKm={avgWeeklyKm}
         />
-      </section>
-
-      {/* KPI row: this week / this month / streak / year to date. */}
-      <section className="mb-[18px] grid grid-cols-1 gap-[18px] sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          accent="#b6f35a"
-          label="This week"
-          hint="Mon-Sun"
-          value={thisWeek ? thisWeek.distance_km.toFixed(1) : "--"}
-          unit="km"
-          footLeft={thisWeek ? `${thisWeek.runs} ${thisWeek.runs === 1 ? "run" : "runs"}` : undefined}
-          footRight={
-            weekDiffKm != null && lastWeek ? (
-              <Delta value={weekDiffKm} text={`${weekDiffKm > 0 ? "+" : weekDiffKm < 0 ? "-" : ""}${Math.abs(weekDiffKm).toFixed(1)} km vs last wk`} />
-            ) : undefined
-          }
-        />
-        <KpiCard
-          accent="#38d6ff"
-          label={now.toLocaleDateString(undefined, { month: "long" })}
-          hint={`${now.getDate()} of ${daysInThisMonth} days`}
-          value={thisMonth ? thisMonth.distance_km.toFixed(1) : "--"}
-          unit="km"
-          footLeft={lastMonth ? `Last month ${lastMonth.distance_km.toFixed(0)} km` : undefined}
-          footRight={
-            monthDiffPct != null ? (
-              <Delta value={monthDiffPct} text={`${monthDiffPct > 0 ? "+" : "-"}${Math.abs(monthDiffPct).toFixed(0)}% vs last month`} />
-            ) : undefined
-          }
-        />
-        <KpiCard
-          accent="#ffb938"
-          label="Streak"
-          hint="Weeks with a run"
-          value={String(streak)}
-          unit={streak === 1 ? "week" : "weeks"}
-          visual={
-            weeklyMileage ? (
-              <div className="flex gap-1">
-                {weeklyMileage.map((w) => (
-                  <i
-                    key={w.week_start}
-                    className={"h-[5px] flex-1 rounded-sm " + (w.runs > 0 ? "bg-[linear-gradient(90deg,#ffb938,#ff7a45)]" : "bg-border")}
-                  />
-                ))}
-              </div>
-            ) : undefined
-          }
-          footLeft={weeklyMileage ? `Last ${weeklyMileage.length} weeks` : undefined}
-        />
-        <KpiCard
-          accent="#a27bff"
-          label="Year to date"
-          hint={String(now.getFullYear())}
-          value={yearToDateKm != null ? yearToDateKm.toFixed(0) : "--"}
-          unit="km"
-          footLeft="Since 1 Jan"
-        />
+        {/* KPI cards: this week / this month / streak / year to date. */}
+        <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:col-start-1">
+          <KpiCard
+            accent="#b6f35a"
+            label="This week"
+            hint="Mon-Sun"
+            value={thisWeek ? thisWeek.distance_km.toFixed(1) : "--"}
+            unit="km"
+            footLeft={thisWeek ? `${thisWeek.runs} ${thisWeek.runs === 1 ? "run" : "runs"}` : undefined}
+            footRight={
+              weekDiffKm != null && lastWeek ? (
+                <Delta value={weekDiffKm} text={`${weekDiffKm > 0 ? "+" : weekDiffKm < 0 ? "-" : ""}${Math.abs(weekDiffKm).toFixed(1)} km vs last wk`} />
+              ) : undefined
+            }
+          />
+          <KpiCard
+            accent="#38d6ff"
+            label={now.toLocaleDateString(undefined, { month: "long" })}
+            hint={`${now.getDate()} of ${daysInThisMonth} days`}
+            value={thisMonth ? thisMonth.distance_km.toFixed(1) : "--"}
+            unit="km"
+            footLeft={lastMonth ? `Last month ${lastMonth.distance_km.toFixed(0)} km` : undefined}
+            footRight={
+              monthDiffPct != null ? (
+                <Delta value={monthDiffPct} text={`${monthDiffPct > 0 ? "+" : "-"}${Math.abs(monthDiffPct).toFixed(0)}% vs last month`} />
+              ) : undefined
+            }
+          />
+          <KpiCard
+            accent="#ffb938"
+            label="Streak"
+            hint="Weeks with a run"
+            value={String(streak)}
+            unit={streak === 1 ? "week" : "weeks"}
+            visual={
+              weeklyMileage ? (
+                <div className="flex gap-1">
+                  {weeklyMileage.map((w) => (
+                    <i
+                      key={w.week_start}
+                      className={"h-[5px] flex-1 rounded-sm " + (w.runs > 0 ? "bg-[linear-gradient(90deg,#ffb938,#ff7a45)]" : "bg-border")}
+                    />
+                  ))}
+                </div>
+              ) : undefined
+            }
+            footLeft={weeklyMileage ? `Last ${weeklyMileage.length} weeks` : undefined}
+          />
+          <KpiCard
+            accent="#a27bff"
+            label="Year to date"
+            hint={String(now.getFullYear())}
+            value={yearToDateKm != null ? yearToDateKm.toFixed(0) : "--"}
+            unit="km"
+            footLeft="Since 1 Jan"
+          />
+        </div>
       </section>
 
       {/* Main grid: trends and last run on the left, habits and the week on the right. */}
@@ -273,7 +271,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-col gap-[18px]">
-          <ConsistencyCard weekly={weeklyMileage} />
           <WeekStripCard runs={activityDates} races={races} />
         </div>
       </section>

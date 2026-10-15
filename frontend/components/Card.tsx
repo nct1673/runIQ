@@ -33,6 +33,16 @@ export default function Card({ title, href, info, className = "", children }: Ca
   );
 }
 
+/** Card title with a colored dot, as in the analytics design draft. */
+export function CardTitle({ accent, children }: { accent: string; children: ReactNode }) {
+  return (
+    <h3 className="flex items-center gap-2 text-sm font-semibold text-text">
+      <i className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: accent }} />
+      {children}
+    </h3>
+  );
+}
+
 /** Small "i" icon; the popover opens on hover or keyboard focus (pure CSS). */
 export function InfoTip({ children }: { children: ReactNode }) {
   return (
