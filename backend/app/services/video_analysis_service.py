@@ -40,6 +40,42 @@ class VideoConversionError(ValueError):
     """The uploaded file couldn't be read or converted to a browser-playable format."""
 
 
+# ffmpeg picks a demuxer from the file's extension and contents, so the
+# client-supplied name and Content-Type can't be trusted: a playlist
+# uploaded as "x.m3u8" would make ffprobe/ffmpeg follow file references
+# inside it. Only these containers are accepted, and the first bytes must
+# actually match the claimed container.
+ALLOWED_SUFFIXES = frozenset(VIDEO_MIME)
+_MP4_MOV_ATOMS = {b"ftyp", b"moov", b"mdat", b"wide", b"free", b"skip"}
+# Network/other protocols are never needed for a plain local file.
+FFMPEG_INPUT_GUARD = ["-protocol_whitelist", "file"]
+
+
+def validated_suffix(filename: str | None) -> str:
+    """Lowercased extension of the client's filename if it's an allowed
+    video container, else VideoConversionError (surfaced as HTTP 422)."""
+    suffix = Path(filename or "").suffix.lower()
+    if suffix not in ALLOWED_SUFFIXES:
+        raise VideoConversionError(
+            f"Unsupported file type. Upload one of: {', '.join(sorted(ALLOWED_SUFFIXES))}."
+        )
+    return suffix
+
+
+def looks_like_video(path: Path, suffix: str) -> bool:
+    """True if the file's leading bytes match the container its extension
+    claims (mp4/mov, webm, avi). Text such as an HLS playlist fails."""
+    with path.open("rb") as f:
+        head = f.read(12)
+    if suffix in {".mp4", ".mov"}:
+        return head[4:8] in _MP4_MOV_ATOMS
+    if suffix == ".webm":
+        return head[:4] == b"\x1a\x45\xdf\xa3"  # EBML header (WebM/Matroska)
+    if suffix == ".avi":
+        return head[:4] == b"RIFF" and head[8:12] == b"AVI "
+    return False
+
+
 def _ensure_web_playable(dest: Path) -> Path:
     """Browsers only play H.264 in MP4 and VP8/VP9/AV1 in WebM. Anything else
     (iPhone HEVC .mov, .avi, ...) is re-encoded to H.264 MP4 -- video only,
@@ -48,7 +84,7 @@ def _ensure_web_playable(dest: Path) -> Path:
     isn't installed (plain local dev) the file is kept as is."""
     try:
         probe = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+            ["ffprobe", "-v", "error", *FFMPEG_INPUT_GUARD, "-select_streams", "v:0",
              "-show_entries", "stream=codec_name", "-of", "csv=p=0", str(dest)],
             capture_output=True, text=True, timeout=30,
         )
@@ -65,7 +101,7 @@ def _ensure_web_playable(dest: Path) -> Path:
 
     tmp = dest.with_name(f"{dest.stem}.tmp.mp4")
     result = subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-i", str(dest),
+        ["ffmpeg", "-y", "-v", "error", *FFMPEG_INPUT_GUARD, "-i", str(dest),
          "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
          "-an", "-movflags", "+faststart", "-fps_mode", "passthrough", str(tmp)],
         capture_output=True, text=True, timeout=600,
@@ -101,6 +137,7 @@ def save_upload(db: Session, user_id: uuid.UUID, file: UploadFile) -> VideoAnaly
     memory -- these can be large) and records it as status="pending".
     Pure storage/bookkeeping; does not analyze anything.
     """
+    suffix = validated_suffix(file.filename)  # before anything is written
     VIDEO_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
     video = VideoAnalysis(
@@ -113,12 +150,13 @@ def save_upload(db: Session, user_id: uuid.UUID, file: UploadFile) -> VideoAnaly
     db.add(video)
     db.flush()  # assigns video.id without committing yet
 
-    suffix = Path(file.filename or "").suffix
     dest = VIDEO_STORAGE_DIR / f"{video.id}{suffix}"
     with dest.open("wb") as out:
         shutil.copyfileobj(file.file, out)
 
     try:
+        if not looks_like_video(dest, suffix):
+            raise VideoConversionError("This file's contents don't match its video format.")
         dest = _ensure_web_playable(dest)
     except VideoConversionError:
         dest.unlink(missing_ok=True)
