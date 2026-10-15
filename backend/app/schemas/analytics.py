@@ -13,6 +13,10 @@ class SummaryOut(BaseModel):
     # (e.g. 12.5 == +12.5%). None until there's a prior week to compare
     # against.
     distance_delta_pct: float | None
+    # Most recent Garmin-estimated vo2_max reading, and its change vs the
+    # latest reading from 7+ days ago. Both None until there's data.
+    vo2_max: float | None
+    vo2max_delta_pct: float | None
 
 
 class WeeklyMileagePoint(BaseModel):
@@ -45,6 +49,13 @@ class BiomechanicsTrendPoint(BaseModel):
     avg_vertical_oscillation: float | None = None
     avg_vertical_ratio: float | None = None
     avg_ground_contact_time: float | None = None
+    avg_hr: float | None = None
+    avg_power: float | None = None
+    norm_power: float | None = None
+    elevation_gain_m: float | None = None
+    calories: float | None = None
+    temperature_c: float | None = None
+    humidity_pct: float | None = None
 
 
 class TypeSplitEntry(BaseModel):

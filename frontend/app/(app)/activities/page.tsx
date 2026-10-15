@@ -32,6 +32,11 @@ interface Activity {
   activity_type: string | null;
   temperature_c: number | null;
   weather_condition: string | null;
+  hr_time_in_zone_1: number | null;
+  hr_time_in_zone_2: number | null;
+  hr_time_in_zone_3: number | null;
+  hr_time_in_zone_4: number | null;
+  hr_time_in_zone_5: number | null;
 }
 
 /** GET /api/activities/{id} -- every `activities` column plus weather,
@@ -177,24 +182,93 @@ function WeatherGlyph({ condition, className }: { condition: string; className?:
   return <CloudIcon className={className} />;
 }
 
-function StatTile({
-  icon: Icon,
-  value,
-  label,
-}: {
-  icon: typeof TrendingUpIcon;
-  value: string;
-  label: string;
-}) {
+const ZONE_STRIP_BG: Record<number, string> = {
+  1: "#6e6a9e",
+  2: "var(--color-blue)",
+  3: "var(--color-positive)",
+  4: "linear-gradient(90deg, #ffb938, #ff7a45)",
+  5: "var(--color-brand)",
+};
+
+function Metric({ label, value, children }: { label: string; value: string; children?: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1.5 text-text-muted">
-        <Icon className="h-3.5 w-3.5" />
-        <span className="text-[11px] uppercase tracking-wide">{label}</span>
-      </div>
-      <span className="text-sm font-semibold text-text">{value}</span>
+    <div className="sm:pl-[18px]">
+      <div className="text-[11px] uppercase tracking-wider text-text-muted">{label}</div>
+      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+      {children}
     </div>
   );
+}
+
+const COMPARE_RUNS = 5;
+
+/** Average pace of the up-to-5 runs of the same type just before `activity`
+ * (`all` is newest first), i.e. your own baseline, as in the dashboard's Latest run card. */
+function paceDiffVsPrevious(activity: Activity, all: Activity[]): { diff: number; n: number } | null {
+  if (activity.avg_pace_s_per_km == null) return null;
+  const earlier = all
+    .filter(
+      (a) =>
+        a.id !== activity.id &&
+        a.started_at < activity.started_at &&
+        a.activity_type === activity.activity_type &&
+        a.avg_pace_s_per_km != null,
+    )
+    .slice(0, COMPARE_RUNS);
+  if (earlier.length === 0) return null;
+  const baseline = earlier.reduce((sum, a) => sum + (a.avg_pace_s_per_km as number), 0) / earlier.length;
+  return { diff: activity.avg_pace_s_per_km - baseline, n: earlier.length };
+}
+
+function activityHrZones(a: Activity): ZoneDatum[] {
+  return [
+    { zone: 1, seconds: a.hr_time_in_zone_1 ?? 0 },
+    { zone: 2, seconds: a.hr_time_in_zone_2 ?? 0 },
+    { zone: 3, seconds: a.hr_time_in_zone_3 ?? 0 },
+    { zone: 4, seconds: a.hr_time_in_zone_4 ?? 0 },
+    { zone: 5, seconds: a.hr_time_in_zone_5 ?? 0 },
+  ];
+}
+
+/** Single-row stacked bar of time-in-HR-zone, with percentages beneath. */
+function ZoneStrip({ zones }: { zones: ZoneDatum[] }) {
+  const total = zones.reduce((sum, z) => sum + z.seconds, 0);
+  if (total === 0) return null;
+  const pcts = zones.map((z) => ({ zone: z.zone, pct: (z.seconds / total) * 100 }));
+  const top = pcts.reduce((best, z) => (z.pct > best.pct ? z : best));
+
+  return (
+    <div className="mt-[18px]">
+      <div className="flex h-2 gap-0.5 overflow-hidden rounded-full">
+        {pcts.map(({ zone, pct }) => (
+          <i key={zone} style={{ width: `${pct}%`, background: ZONE_STRIP_BG[zone] }} />
+        ))}
+      </div>
+      <div className="mt-[7px] flex justify-between text-[11px] text-text-muted">
+        <span>Time in HR zones</span>
+        <span>
+          {pcts.map(({ zone, pct }, i) => (
+            <span key={zone}>
+              {i > 0 && " · "}
+              {zone === top.zone ? (
+                <b className="font-medium text-blue">
+                  Z{zone} {Math.round(pct)}%
+                </b>
+              ) : (
+                `Z${zone} ${Math.round(pct)}%`
+              )}
+            </span>
+          ))}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function dominantZone(zones: ZoneDatum[]): number | null {
+  const total = zones.reduce((sum, z) => sum + z.seconds, 0);
+  if (total === 0) return null;
+  return zones.reduce((best, z) => (z.seconds > best.seconds ? z : best)).zone;
 }
 
 function hrZones(d: ActivityDetail): ZoneDatum[] {
@@ -217,9 +291,9 @@ function powerZones(d: ActivityDetail): ZoneDatum[] {
   ];
 }
 
-/** The click-to-expand dropdown's contents: zone charts up top (the one
- * part asked for as a chart, not a plain field), the full DB record
- * below as a label/value grid. */
+/** The click-to-expand dropdown's contents: the full DB record as a
+ * label/value grid, then the zone charts (the one part asked for as a
+ * chart, not a plain field) below it. */
 function ActivityDetailPanel({ state }: { state: "loading" | "error" | ActivityDetail }) {
   if (state === "loading") {
     return <p className="px-5 pb-5 text-sm text-text-muted">Loading details...</p>;
@@ -230,11 +304,6 @@ function ActivityDetailPanel({ state }: { state: "loading" | "error" | ActivityD
 
   return (
     <div className="flex flex-col gap-5 border-t border-border px-5 pb-5 pt-4">
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <ZoneBars title="Heart Rate Zones" zones={hrZones(state)} />
-        <ZoneBars title="Power Zones" zones={powerZones(state)} />
-      </div>
-
       <div>
         <h4 className="mb-3 text-sm font-medium text-text">Full Record</h4>
         <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-4">
@@ -248,55 +317,50 @@ function ActivityDetailPanel({ state }: { state: "loading" | "error" | ActivityD
           ))}
         </div>
       </div>
+
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <ZoneBars title="Heart Rate Zones" zones={hrZones(state)} />
+        <ZoneBars title="Power Zones" zones={powerZones(state)} />
+      </div>
     </div>
   );
 }
 
 function ActivityCard({
   activity,
+  allActivities,
   isOpen,
   detail,
   onToggle,
 }: {
   activity: Activity;
+  allActivities: Activity[];
   isOpen: boolean;
   detail: "loading" | "error" | ActivityDetail | undefined;
   onToggle: () => void;
 }) {
   const { weekday, day, time } = formatDate(activity.started_at);
-  const isTreadmill = activity.activity_type === "treadmill_running";
   const typeLabel = activity.activity_type ? ACTIVITY_TYPE_LABEL[activity.activity_type] ?? activity.activity_type : "Run";
+  const zones = activityHrZones(activity);
+  const topZone = dominantZone(zones);
+  const pace = paceDiffVsPrevious(activity, allActivities);
 
   return (
-    <div className="rounded-2xl border border-border bg-surface transition-colors">
+    <div className="rounded-2xl border border-border bg-surface shadow-[0_8px_24px_rgba(0,0,0,0.2)] transition-colors">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={isOpen}
-        className="w-full p-5 text-left hover:bg-surface-hover"
+        className="w-full rounded-2xl p-[22px] text-left hover:bg-surface-hover"
       >
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div
-              className={
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl " +
-                (isTreadmill ? "bg-stat-time" : "bg-stat-runs")
-              }
-            >
-              {isTreadmill ? (
-                <ClockIcon className="h-5 w-5 text-white" />
-              ) : (
-                <BoltIcon className="h-5 w-5 text-white" />
-              )}
-            </div>
-            <div>
-              <div className="text-sm font-medium text-text">
-                {weekday}, {day} <span className="text-text-muted">· {time}</span>
-              </div>
-              <div className="text-xs text-text-muted">{typeLabel}</div>
-            </div>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <i className="inline-block h-2 w-2 rounded-full bg-brand" />
+            {weekday} {day}
+            <span className="font-normal text-text-muted">
+              · {time} · {typeLabel}
+            </span>
           </div>
-
           <div className="flex items-center gap-2.5">
             {activity.temperature_c != null && (
               <div className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-text-muted">
@@ -310,17 +374,36 @@ function ActivityCard({
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-4 border-t border-border pt-4 sm:grid-cols-5">
-          <StatTile icon={TrendingUpIcon} value={`${activity.distance_km.toFixed(2)} km`} label="Distance" />
-          <StatTile icon={ClockIcon} value={formatDuration(activity.duration_s)} label="Duration" />
-          <StatTile icon={BoltIcon} value={formatPace(activity.avg_pace_s_per_km)} label="Pace" />
-          <StatTile icon={HeartIcon} value={activity.avg_hr != null ? `${Math.round(activity.avg_hr)} bpm` : "--"} label="Avg HR" />
-          <StatTile
-            icon={ArrowUpRightIcon}
-            value={activity.elevation_gain_m != null ? `${Math.round(activity.elevation_gain_m)} m` : "--"}
-            label="Elevation"
-          />
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-6">
+          <div className="text-5xl font-semibold tracking-tight tabular-nums">
+            {activity.distance_km.toFixed(2)}
+            <span className="ml-1 text-[15px] font-medium text-text-muted">km</span>
+          </div>
+          <div className="grid flex-1 grid-cols-2 gap-y-4 sm:grid-cols-4 sm:border-l sm:border-border">
+            <Metric label="Pace" value={formatPace(activity.avg_pace_s_per_km)}>
+              {pace == null ? null : Math.abs(pace.diff) < 2 ? (
+                <span className="text-xs text-text-muted">In line with last {pace.n}</span>
+              ) : (
+                <span className={"text-xs " + (pace.diff < 0 ? "text-positive" : "text-negative")}>
+                  {pace.diff < 0 ? "↑" : "↓"} {Math.round(Math.abs(pace.diff))}s vs last {pace.n}
+                </span>
+              )}
+            </Metric>
+            <Metric label="Time" value={formatDuration(activity.duration_s)}>
+              <span className="text-xs text-text-muted">moving</span>
+            </Metric>
+            <Metric label="Avg HR" value={activity.avg_hr != null ? `${Math.round(activity.avg_hr)} bpm` : "--"}>
+              {topZone != null && <span className="text-xs text-text-muted">Zone {topZone}</span>}
+            </Metric>
+            <Metric label="Cadence" value={activity.avg_cadence != null ? `${Math.round(activity.avg_cadence)} spm` : "--"}>
+              {activity.avg_cadence != null && activity.avg_cadence < 170 && (
+                <span className="text-xs text-amber">Aim 170+</span>
+              )}
+            </Metric>
+          </div>
         </div>
+
+        <ZoneStrip zones={zones} />
       </button>
 
       {isOpen && detail && <ActivityDetailPanel state={detail} />}
@@ -447,6 +530,7 @@ export default function ActivitiesPage() {
                     <ActivityCard
                       key={a.id}
                       activity={a}
+                      allActivities={activities ?? []}
                       isOpen={openActivityId === a.id}
                       detail={details[a.id]}
                       onToggle={() => toggleActivity(a.id)}
