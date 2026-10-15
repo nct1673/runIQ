@@ -10,11 +10,13 @@ from app.models.conversation import Conversation
 from app.models.conversation_message import ConversationMessage
 from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.personal_record import PersonalRecord
+from app.models.personal_record import PersonalRecord
 from app.models.prediction import Prediction
 from app.models.race import Race
 from app.models.training_load import TrainingLoad
 from app.models.user import User
 from app.models.user_profile import UserProfile
+from app.models.video_analysis import VideoAnalysis
 from app.models.weather import WeatherCondition
 
 __all__ = [
@@ -26,10 +28,12 @@ __all__ = [
     "ConversationMessage",
     "KnowledgeChunk",
     "PersonalRecord",
+    "PersonalRecord",
     "Prediction",
     "Race",
     "TrainingLoad",
     "User",
     "UserProfile",
+    "VideoAnalysis",
     "WeatherCondition",
 ]

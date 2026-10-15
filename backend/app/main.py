@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api.routes import activities, analytics, auth, chat, personal_records, predictions, profile, races, weather
+from app.api.routes import activities, analytics, auth, chat, personal_records, predictions, profile, races, video_analysis, weather
 from app.core.config import get_settings
 from app.services.user_service import get_current_user
 
@@ -62,6 +62,12 @@ app.include_router(
 )
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"], dependencies=_protected)
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"], dependencies=_protected)
+app.include_router(
+    video_analysis.router,
+    prefix="/api/video-analysis",
+    tags=["video-analysis"],
+    dependencies=_protected,
+)
 
 
 @app.get("/health")
