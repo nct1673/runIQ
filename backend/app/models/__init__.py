@@ -9,6 +9,7 @@ from app.models.coach_session import CoachSession
 from app.models.conversation import Conversation
 from app.models.conversation_message import ConversationMessage
 from app.models.knowledge_chunk import KnowledgeChunk
+from app.models.personal_record import PersonalRecord
 from app.models.prediction import Prediction
 from app.models.race import Race
 from app.models.training_load import TrainingLoad
@@ -24,6 +25,7 @@ __all__ = [
     "Conversation",
     "ConversationMessage",
     "KnowledgeChunk",
+    "PersonalRecord",
     "Prediction",
     "Race",
     "TrainingLoad",
