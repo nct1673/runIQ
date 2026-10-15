@@ -67,8 +67,6 @@ the manual upload later without changing the ingestion logic itself.
 ## Success criteria / Definition of Done
 
 - **Data:** raw export reproducibly processed into Postgres.
-- **ML:** models have baselines, time-series-safe evaluation, documented
-  limitations.
 - **AI:** chatbot answers real questions using the user's real data, with
   evidence, not fabrication.
 - **Engineering:** containerized, tested, deployable.

@@ -1,8 +1,9 @@
 # RunIQ
 
 Personal running-intelligence platform — turns Garmin running history plus
-weather data into a personalized understanding of performance,
-via classical ML predictions and an evidence-grounded AI running coach.
+weather data into a personalized understanding of performance, via trend
+analytics, pose-based running-form analysis, and an evidence-grounded AI
+running coach.
 
 Full product spec: [`RunIQ_Project_Blueprint.pdf`](./RunIQ_Project_Blueprint.pdf).
 Architecture, PRD, data model, and roadmap: [`docs/`](./docs).
@@ -10,7 +11,7 @@ Architecture, PRD, data model, and roadmap: [`docs/`](./docs).
 ## Stack
 
 - **Backend:** Python / FastAPI / SQLAlchemy / PostgreSQL (+pgvector)
-- **ML:** scikit-learn, XGBoost/LightGBM, MLflow, SHAP
+- **Running Form Analysis:** MediaPipe pose estimation + OpenCV
 - **AI Coach:** LLM + SQL/RAG hybrid retrieval (provider-agnostic)
 - **Frontend:** React / Next.js
 - **Infra:** Docker Compose
