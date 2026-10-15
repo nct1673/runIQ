@@ -5,6 +5,7 @@ directly.
 from app.models.activity import Activity
 from app.models.activity_metrics import ActivityMetrics
 from app.models.activity_raw import ActivityRaw
+from app.models.coach_session import CoachSession
 from app.models.conversation import Conversation
 from app.models.conversation_message import ConversationMessage
 from app.models.knowledge_chunk import KnowledgeChunk
@@ -19,6 +20,7 @@ __all__ = [
     "Activity",
     "ActivityMetrics",
     "ActivityRaw",
+    "CoachSession",
     "Conversation",
     "ConversationMessage",
     "KnowledgeChunk",

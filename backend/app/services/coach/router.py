@@ -20,7 +20,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.models.conversation_message import ConversationMessage
-from app.services.coach import llm_client, rag_tool, sql_tool
+from app.services.coach import llm_client, query_tool, rag_tool, sql_tool
 
 SYSTEM_PROMPT = """You are RunIQ's AI running coach. You help the user understand their \
 own training by comparing it to their own historical baseline -- never population \
@@ -30,9 +30,22 @@ Rules:
 - Only state things you can support with a tool result. If a tool returns no data \
 or you don't have enough information, say so plainly rather than guessing.
 - When you use a tool result, refer to the specific numbers it returned.
+- For "how should I...", "why does...", "what is..." or any training-advice question, \
+FIRST call retrieve_knowledge, and base general advice only on what it returns. Cite the \
+source file in parentheses, e.g. (tapering_and_racing.md). If nothing relevant comes back, \
+say you have no source for that rather than answering from memory.
+- For anything about the user's races, personal records, weather, form analysis or profile, \
+call run_readonly_query (coach.races, coach.personal_records, ...) rather than assuming. \
+Questions like "my upcoming race" or "my taper" need the race date and distance from there.
+- Combine them when useful: personal numbers from the data tools, general guidance from the \
+knowledge base, and make clear which is which.
+- Never do arithmetic or percentage comparisons in your head. Only state a difference or \
+percentage if a tool returned it, or compute it in SQL; otherwise quote the raw numbers. \
+Check direction: a higher pace in s/km is SLOWER, a lower one is faster.
 - Weather/training-load relationships are estimates, not medical or \
 causal claims -- describe them as "associated with" or "the model estimates", \
 never "caused by".
+- Never ask permission to use a tool you have -- just use it.
 - Keep answers concise and directly useful to a runner, not a data dump."""
 
 TOOL_SCHEMAS = [
@@ -102,14 +115,30 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "retrieve_knowledge",
-            "description": "Search the running-science knowledge base for general (non-personal) "
-            "information, e.g. why heat affects performance, training zones, recovery.",
+            "description": "Search the running-science knowledge base. Call this FIRST for any "
+            "general or advice question (tapering, pacing, heat, recovery, injuries, form "
+            "metrics, training plans, fuelling), alongside the user's own data tools. "
+            "Returns cited passages (source_file, chunk_text).",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "A focused search query for the knowledge base."}
                 },
                 "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_readonly_query",
+            "description": "Run a read-only SQL query on the user's own data when the other "
+            "tools can't answer (e.g. a specific race, personal records, a custom filter). "
+            "Prefer the other tools when they fit. " + query_tool.SCHEMA_HELP,
+            "parameters": {
+                "type": "object",
+                "properties": {"sql": {"type": "string", "description": "One SELECT statement."}},
+                "required": ["sql"],
             },
         },
     },
@@ -127,6 +156,7 @@ def _build_tool_dispatch(db: Session, user_id: uuid.UUID) -> dict:
         "compare_periods": functools.partial(sql_tool.compare_periods, db, user_id),
         "get_similar_runs": functools.partial(sql_tool.get_similar_runs, db, user_id),
         "retrieve_knowledge": lambda query, k=5: rag_tool.retrieve(db, query, k),
+        "run_readonly_query": functools.partial(query_tool.run_readonly_query, user_id),
     }
 
 
@@ -170,7 +200,13 @@ def answer(db: Session, user_id: uuid.UUID, conversation_id: uuid.UUID, content:
             name = call["function"]["name"]
             args = call["function"].get("arguments") or {}
             fn = dispatch.get(name)
-            result = fn(**args) if fn else {"error": f"unknown tool '{name}'"}
+            if fn is None:
+                result = {"error": f"unknown tool '{name}'"}
+            else:
+                try:
+                    result = fn(**args)
+                except TypeError:  # model passed missing/unexpected arguments
+                    result = {"error": f"invalid arguments for tool '{name}'"}
             evidence.append({"tool": name, "arguments": args, "result": result})
             messages.append({"role": "tool", "content": json.dumps(result)})
 

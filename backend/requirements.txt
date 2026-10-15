@@ -17,3 +17,4 @@ pgvector>=0.2
 garminconnect>=0.2.24
 bcrypt>=4.1
 pytz>=2024.1
+sqlglot>=25.0  # SQL validation for the Coach free-form query tool

@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     ollama_chat_model: str = "qwen3:14b"
     ollama_embed_model: str = "nomic-embed-text"
 
+    # Read-only Postgres login (role `coach_ro`, created by migration
+    # c04a7d1e5b92) used only by the Coach's free-form SQL tool. Host/port/db
+    # are taken from database_url; only the credentials differ.
+    coach_db_user: str = "coach_ro"
+    coach_db_password: str | None = None
+
     # Frontend
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
