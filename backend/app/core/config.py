@@ -41,8 +41,11 @@ class Settings(BaseSettings):
     session_secret_key: str
     auth_password: str | None = None
 
-    # AI Coach (Module 6) -- Ollama, local/GPU-hosted, not a cloud API.
+    # AI Coach (Module 6) -- "ollama" (local/GPU-hosted) or "gemini"
+    # (Google Gemini API via LangChain). Embeddings always use Ollama.
     llm_provider: str = "ollama"
+    gemini_api_key: str | None = None
+    gemini_chat_model: str = "gemini-3.8-flash"
     ollama_base_url: str = "http://localhost:11434"
     ollama_chat_model: str = "qwen3:14b"
     ollama_embed_model: str = "nomic-embed-text"

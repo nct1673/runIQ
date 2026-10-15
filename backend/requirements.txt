@@ -14,6 +14,7 @@ shap>=0.45
 httpx>=0.27
 python-dotenv>=1.0
 pgvector>=0.2
+langchain-google-genai>=4.0  # Gemini chat for the AI Coach (LLM_PROVIDER=gemini)
 garminconnect>=0.2.24
 bcrypt>=4.1
 pytz>=2024.1

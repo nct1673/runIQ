@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import Header from "@/components/Header";
-import { PlusIcon, SendIcon } from "@/components/icons";
+import { PlusIcon, SendIcon, TrashIcon } from "@/components/icons";
 
 /** Blueprint §29-33: AI Running Coach chat interface. */
 
@@ -80,6 +80,21 @@ export default function CoachPage() {
       .catch(() => setMessages([]));
   }
 
+  async function handleDeleteConversation(id: string, e: React.MouseEvent) {
+    e.stopPropagation(); // don't also trigger selectConversation on the row
+    try {
+      const res = await fetch(`/api/chat/conversations/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      if (activeId === id) {
+        setActiveId(null);
+        setMessages([]);
+      }
+    } catch (err) {
+      setError(`Failed to delete conversation: ${(err as Error).message}`);
+    }
+  }
+
   async function handleNewConversation() {
     const res = await fetch("/api/chat/conversations", { method: "POST" });
     const convo: Conversation = await res.json();
@@ -148,19 +163,33 @@ export default function CoachPage() {
           </button>
           <div className="flex flex-col gap-1">
             {conversations.map((c) => (
-              <button
+              <div
                 key={c.id}
-                type="button"
-                onClick={() => selectConversation(c.id)}
                 className={
-                  "truncate rounded-xl px-3 py-2 text-left text-sm " +
-                  (c.id === activeId
-                    ? "bg-brand text-white"
-                    : "text-text-muted hover:bg-surface-hover hover:text-text")
+                  "group flex items-center rounded-xl " +
+                  (c.id === activeId ? "bg-brand text-white" : "text-text-muted hover:bg-surface-hover hover:text-text")
                 }
               >
-                {c.title || "New conversation"}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => selectConversation(c.id)}
+                  className="min-w-0 flex-1 truncate px-3 py-2 text-left text-sm"
+                >
+                  {c.title || "New conversation"}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleDeleteConversation(c.id, e)}
+                  aria-label="Delete conversation"
+                  title="Delete conversation"
+                  className={
+                    "mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 " +
+                    (c.id === activeId ? "hover:bg-white/20" : "hover:bg-surface-hover hover:text-negative")
+                  }
+                >
+                  <TrashIcon className="h-3.5 w-3.5" />
+                </button>
+              </div>
             ))}
             {conversations.length === 0 && (
               <p className="px-3 py-2 text-sm text-text-muted">No conversations yet.</p>
@@ -203,7 +232,15 @@ export default function CoachPage() {
                   </div>
                 </div>
               ))}
-              {sending && <p className="text-sm text-text-muted">Thinking...</p>}
+              {sending && (
+                <div className="flex justify-start">
+                  <div className="flex items-center gap-1.5 rounded-2xl bg-bg px-4 py-3.5">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted" />
+                  </div>
+                </div>
+              )}
             </div>
             <div ref={bottomRef} />
           </div>

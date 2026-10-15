@@ -75,6 +75,21 @@ def list_messages(
     ]
 
 
+@router.delete("/conversations/{conversation_id}", status_code=204)
+def delete_conversation(
+    conversation_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    """Deletes a conversation and its messages. No ON DELETE CASCADE on
+    conversation_messages.conversation_id, so messages are removed first
+    to avoid a FK violation."""
+    convo = _get_owned_conversation(db, user, conversation_id)
+    db.query(ConversationMessage).filter(ConversationMessage.conversation_id == convo.id).delete()
+    db.delete(convo)
+    db.commit()
+
+
 @router.post("/conversations/{conversation_id}/messages", response_model=MessageOut)
 def send_message(
     conversation_id: uuid.UUID,
