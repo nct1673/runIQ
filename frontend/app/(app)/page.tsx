@@ -2,20 +2,12 @@ import Link from "next/link";
 
 import Card from "@/components/Card";
 import Header from "@/components/Header";
-import {
-  ActivityListIcon,
-  BarChartIcon,
-  ChatIcon,
-  FlagIcon,
-  HomeIcon,
-  TrendingUpIcon,
-} from "@/components/icons";
+import { ActivityListIcon, BarChartIcon, ChatIcon, FlagIcon, HomeIcon } from "@/components/icons";
 
 const MODULES = [
   { href: "/dashboard", label: "Dashboard", icon: HomeIcon },
   { href: "/activities", label: "Activities", icon: ActivityListIcon },
   { href: "/analytics", label: "Analytics", icon: BarChartIcon },
-  { href: "/predictions", label: "Predictions", icon: TrendingUpIcon },
   { href: "/race", label: "Race", icon: FlagIcon },
   { href: "/coach", label: "AI Coach", icon: ChatIcon },
 ];

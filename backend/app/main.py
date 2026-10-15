@@ -2,13 +2,23 @@
 
 Wires together the FastAPI app, session/CORS middleware, and the
 versioned API routers. Business logic lives in app.services /
-app.ingestion / app.ml -- this file only assembles the app.
+app.ingestion -- this file only assembles the app.
 """
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api.routes import activities, analytics, auth, chat, personal_records, predictions, profile, races, video_analysis, weather
+from app.api.routes import (
+    activities,
+    analytics,
+    auth,
+    chat,
+    personal_records,
+    profile,
+    races,
+    video_analysis,
+    weather,
+)
 from app.core.config import get_settings
 from app.services.user_service import get_current_user
 
@@ -50,9 +60,6 @@ app.include_router(
     analytics.router, prefix="/api/analytics", tags=["analytics"], dependencies=_protected
 )
 app.include_router(weather.router, prefix="/api/weather", tags=["weather"], dependencies=_protected)
-app.include_router(
-    predictions.router, prefix="/api/predictions", tags=["predictions"], dependencies=_protected
-)
 app.include_router(races.router, prefix="/api/races", tags=["races"], dependencies=_protected)
 app.include_router(
     personal_records.router,
