@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import Card, { EmptyPlaceholder } from "@/components/Card";
+import DatePicker from "@/components/DatePicker";
 import Header from "@/components/Header";
 import { ChevronDownIcon, FlagIcon, PlusIcon, TrophyIcon } from "@/components/icons";
 import { formatDuration, formatPace, parseDurationInput } from "@/lib/format";
@@ -12,6 +13,7 @@ interface Race {
   name: string;
   distance_km: number;
   race_date: string; // "YYYY-MM-DD"
+  race_time: string | null; // "HH:MM:SS", local flag-off time
   location: string | null;
   notes: string | null;
   goal_time_s: number | null;
@@ -25,6 +27,7 @@ interface RaceFormValues {
   name: string;
   distance_km: string;
   race_date: string;
+  race_time: string; // "HH:MM", optional flag-off time
   location: string;
   notes: string;
   goal_time: string;
@@ -37,6 +40,7 @@ const EMPTY_FORM: RaceFormValues = {
   name: "",
   distance_km: "",
   race_date: "",
+  race_time: "",
   location: "",
   notes: "",
   goal_time: "",
@@ -57,6 +61,7 @@ function raceToForm(race: Race): RaceFormValues {
     name: race.name,
     distance_km: String(race.distance_km),
     race_date: race.race_date,
+    race_time: race.race_time ? race.race_time.slice(0, 5) : "",
     location: race.location ?? "",
     notes: race.notes ?? "",
     goal_time: race.goal_time_s != null ? formatDuration(race.goal_time_s) : "",
@@ -82,6 +87,15 @@ function formatRaceDate(dateStr: string): string {
   });
 }
 
+/** "05:00:00" -> "5:00 AM" -- flag-off time is stored/edited as HH:MM but
+ * shown the way a runner reads a start time, not a 24h clock. */
+function formatRaceTime(timeStr: string): string {
+  return new Date(`2000-01-01T${timeStr}`).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 /** Common race distances get a nicer label than "21.1 km". */
 function distanceLabel(km: number): string {
   const known: [number, string][] = [
@@ -92,6 +106,24 @@ function distanceLabel(km: number): string {
   ];
   const match = known.find(([d]) => Math.abs(d - km) < 0.05);
   return match ? `${match[1]} · ${km.toFixed(1)} km` : `${km.toFixed(1)} km`;
+}
+
+const DISTANCE_OPTIONS: { value: string; label: string }[] = [
+  { value: "42.195", label: "Full Marathon (42.2km)" },
+  { value: "21.0975", label: "Half Marathon (21.1km)" },
+  { value: "10", label: "10km" },
+  { value: "5", label: "5km" },
+];
+
+/** Which preset (if any) a stored distance_km matches -- "" when the
+ * field is empty (new race, nothing picked yet), "custom" when it's a
+ * real number that isn't one of the presets. */
+function matchDistancePreset(distanceKmStr: string): string {
+  if (!distanceKmStr) return "";
+  const num = Number(distanceKmStr);
+  if (Number.isNaN(num)) return "custom";
+  const match = DISTANCE_OPTIONS.find((o) => Math.abs(Number(o.value) - num) < 0.05);
+  return match ? match.value : "custom";
 }
 
 const inputClass =
@@ -111,9 +143,19 @@ function RaceForm({
 }) {
   const [values, setValues] = useState(initial);
   const [formError, setFormError] = useState<string | null>(null);
+  const [distanceMode, setDistanceMode] = useState(() => matchDistancePreset(initial.distance_km));
 
   function field<K extends keyof RaceFormValues>(key: K, value: RaceFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
+  }
+
+  function handleDistanceModeChange(mode: string) {
+    setDistanceMode(mode);
+    if (mode === "custom") {
+      field("distance_km", "");
+    } else if (mode !== "") {
+      field("distance_km", mode);
+    }
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -152,27 +194,50 @@ function RaceForm({
           <label className={labelClass} htmlFor="distance_km">
             Distance (km)
           </label>
-          <input
+          <select
             id="distance_km"
-            type="number"
-            step="any"
-            min="0"
             className={inputClass}
-            placeholder="e.g. 21.1"
-            value={values.distance_km}
-            onChange={(e) => field("distance_km", e.target.value)}
-          />
+            value={distanceMode}
+            onChange={(e) => handleDistanceModeChange(e.target.value)}
+          >
+            <option value="" disabled>
+              Select distance
+            </option>
+            {DISTANCE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+            <option value="custom">Custom</option>
+          </select>
+          {distanceMode === "custom" && (
+            <input
+              type="number"
+              step="any"
+              min="0"
+              className={inputClass + " mt-2"}
+              placeholder="e.g. 15.3"
+              value={values.distance_km}
+              onChange={(e) => field("distance_km", e.target.value)}
+            />
+          )}
         </div>
         <div>
           <label className={labelClass} htmlFor="race_date">
             Date
           </label>
+          <DatePicker id="race_date" value={values.race_date} onChange={(v) => field("race_date", v)} />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="race_time">
+            Race time <span className="text-text-muted">(flag-off, optional)</span>
+          </label>
           <input
-            id="race_date"
-            type="date"
+            id="race_time"
+            type="time"
             className={inputClass}
-            value={values.race_date}
-            onChange={(e) => field("race_date", e.target.value)}
+            value={values.race_time}
+            onChange={(e) => field("race_time", e.target.value)}
           />
         </div>
         <div>
@@ -335,6 +400,7 @@ function RaceCard({
             </div>
             <div className="text-xs text-text-muted">
               {distanceLabel(race.distance_km)} · {formatRaceDate(race.race_date)}
+              {race.race_time ? ` · ${formatRaceTime(race.race_time)}` : ""}
               {race.location ? ` · ${race.location}` : ""}
             </div>
           </div>
@@ -410,6 +476,7 @@ export default function RacePage() {
       name: values.name.trim(),
       distance_km: Number(values.distance_km),
       race_date: values.race_date,
+      race_time: values.race_time || null,
       location: values.location.trim() || null,
       notes: values.notes.trim() || null,
       goal_time_s: values.goal_time ? parseDurationInput(values.goal_time) : null,

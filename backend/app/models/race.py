@@ -4,9 +4,9 @@ stub (blueprint SS26-28's "race goal" concept), which never got past a
 3-column placeholder with no working endpoints.
 """
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, String
+from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Time
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -24,6 +24,7 @@ class Race(Base):
     name: Mapped[str] = mapped_column(String)
     distance_km: Mapped[float] = mapped_column(Float)
     race_date: Mapped[date] = mapped_column(Date)
+    race_time: Mapped[time | None] = mapped_column(Time, nullable=True)  # local flag-off time, if known
     location: Mapped[str | None] = mapped_column(String, nullable=True)
     notes: Mapped[str | None] = mapped_column(String, nullable=True)
 

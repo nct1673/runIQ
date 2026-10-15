@@ -1,6 +1,6 @@
 """Pydantic request/response schemas for the races API."""
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from pydantic import BaseModel
 
@@ -9,6 +9,7 @@ class RaceCreate(BaseModel):
     name: str
     distance_km: float
     race_date: date
+    race_time: time | None = None  # local flag-off time, if known
     location: str | None = None
     notes: str | None = None
     goal_time_s: float | None = None
@@ -24,6 +25,7 @@ class RaceUpdate(BaseModel):
     name: str | None = None
     distance_km: float | None = None
     race_date: date | None = None
+    race_time: time | None = None
     location: str | None = None
     notes: str | None = None
     goal_time_s: float | None = None
@@ -37,6 +39,7 @@ class RaceOut(BaseModel):
     name: str
     distance_km: float
     race_date: date
+    race_time: time | None = None
     location: str | None = None
     notes: str | None = None
     goal_time_s: float | None = None
