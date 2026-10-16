@@ -5,7 +5,6 @@ import {
   formatDuration,
   formatLongDate,
   hrZoneSeconds,
-  paceDiffVsPrevious,
   paceParts,
   runTitle,
   trainingBadge,
@@ -62,7 +61,6 @@ export default function RunDetail({
   const full = typeof detail === "object" ? detail : null;
   const badge = trainingBadge(a.training_effect_label);
   const pace = paceParts(a.avg_pace_s_per_km);
-  const vs = paceDiffVsPrevious(a, all);
   const topZone = dominantZone(hrZoneSeconds(a));
   const moving = a.moving_duration_s ?? a.duration_s;
 
@@ -133,17 +131,7 @@ export default function RunDetail({
           <HeroStat label="Distance" big value={a.distance_km.toFixed(2)} unit="km">
             {a.elevation_gain_m != null ? `${Math.round(a.elevation_gain_m)} m elevation gain` : "Elevation unavailable"}
           </HeroStat>
-          <HeroStat label="Pace" value={pace.value} unit={pace.unit}>
-            {vs == null ? (
-              "No earlier runs to compare"
-            ) : Math.abs(vs.diff) < 2 ? (
-              `In line with last ${vs.n}`
-            ) : (
-              <span style={{ color: vs.diff < 0 ? "var(--color-positive)" : "var(--color-negative)" }}>
-                {vs.diff < 0 ? "↑" : "↓"} {Math.round(Math.abs(vs.diff))}s vs last {vs.n}
-              </span>
-            )}
-          </HeroStat>
+          <HeroStat label="Pace" value={pace.value} unit={pace.unit} />
           <HeroStat label="Moving time" value={formatDuration(moving)}>
             {full?.elapsed_duration_s != null ? `${formatDuration(full.elapsed_duration_s)} elapsed` : full ? "" : " "}
           </HeroStat>
