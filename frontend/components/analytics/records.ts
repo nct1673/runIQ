@@ -45,3 +45,16 @@ export function agoLabel(iso: string | null): string {
 export function isRecent(iso: string | null, days = 30): boolean {
   return iso != null && Date.now() - new Date(iso).getTime() < days * 86_400_000;
 }
+
+/** The strongest timed PR by VDOT: the score and which distance it came from. */
+export function bestVdot(records: PersonalRecord[] | null): { vdot: number; label: string } | null {
+  let best: { vdot: number; label: string } | null = null;
+  for (const d of RACE_DISTANCES) {
+    const v = recordVdot(
+      records?.find((r) => r.type_id === d.typeId),
+      d.meters,
+    );
+    if (v != null && (best == null || v > best.vdot)) best = { vdot: v, label: d.label };
+  }
+  return best;
+}

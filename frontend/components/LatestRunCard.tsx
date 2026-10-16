@@ -14,16 +14,6 @@ export interface LatestRunActivity {
 
 const COMPARE_RUNS = 5;
 
-function Metric({ label, value, children }: { label: string; value: string; children?: React.ReactNode }) {
-  return (
-    <div className="sm:pl-[18px]">
-      <div className="text-[11px] uppercase tracking-wider text-text-muted">{label}</div>
-      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
-      {children}
-    </div>
-  );
-}
-
 /** "Today" / "Yesterday" / "3 days ago" / a short date once it's over a week old. */
 function relativeDay(iso: string): string {
   const then = new Date(iso);
@@ -35,35 +25,37 @@ function relativeDay(iso: string): string {
   return then.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/** Most recent run, with its pace set against your previous few runs of
- * the same type (your own baseline, not anyone else's). `activities` is
- * GET /api/activities, newest first. */
-export default function LatestRunCard({ activities }: { activities: LatestRunActivity[] | null }) {
-  const latest = activities?.[0];
+const SHOWN_RUNS = 3;
 
-  const earlier = latest
-    ? (activities ?? [])
-        .slice(1)
-        .filter((a) => a.activity_type === latest.activity_type && a.avg_pace_s_per_km != null)
-        .slice(0, COMPARE_RUNS)
-    : [];
-  const baselinePace = earlier.length
-    ? earlier.reduce((sum, a) => sum + (a.avg_pace_s_per_km as number), 0) / earlier.length
-    : null;
-  const paceDiff =
-    latest?.avg_pace_s_per_km != null && baselinePace != null ? latest.avg_pace_s_per_km - baselinePace : null;
+/** Pace of `activities[i]` against the mean of the (up to COMPARE_RUNS) earlier
+ * runs of the same type, in s/km. Negative = faster. null when there's no baseline. */
+function paceDiffAt(activities: LatestRunActivity[], i: number): { diff: number; n: number } | null {
+  const run = activities[i];
+  if (run.avg_pace_s_per_km == null) return null;
+  const earlier = activities
+    .slice(i + 1)
+    .filter((a) => a.activity_type === run.activity_type && a.avg_pace_s_per_km != null)
+    .slice(0, COMPARE_RUNS);
+  if (earlier.length === 0) return null;
+  const baseline = earlier.reduce((sum, a) => sum + (a.avg_pace_s_per_km as number), 0) / earlier.length;
+  return { diff: run.avg_pace_s_per_km - baseline, n: earlier.length };
+}
+
+const COLS = "grid grid-cols-[minmax(0,1.3fr)_0.9fr_1fr_0.9fr_0.7fr] items-center gap-x-2";
+
+/** The last few runs as compact rows; each pace is set against your previous
+ * few runs of the same type (your own baseline, not anyone else's).
+ * `activities` is GET /api/activities, newest first. */
+export default function LatestRunCard({ activities }: { activities: LatestRunActivity[] | null }) {
+  const runs = activities?.slice(0, SHOWN_RUNS) ?? [];
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-[22px] shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-3.5 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <i className="inline-block h-2 w-2 rounded-full bg-brand" />
-          Latest run
-          {latest && (
-            <span className="font-normal text-text-muted">
-              · {relativeDay(latest.started_at)} · {latest.activity_type === "treadmill_running" ? "Treadmill" : "Outdoor"}
-            </span>
-          )}
+          Latest runs
+          <span className="font-normal text-text-muted">· last {SHOWN_RUNS}</span>
         </div>
         <a href="/activities" className="text-xs text-text-soft hover:text-text">
           View details &rarr;
@@ -72,31 +64,64 @@ export default function LatestRunCard({ activities }: { activities: LatestRunAct
 
       {!activities ? (
         <EmptyPlaceholder label="Loading..." />
-      ) : !latest ? (
+      ) : runs.length === 0 ? (
         <EmptyPlaceholder label='No runs yet -- press "Sync".' />
       ) : (
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-6">
-          <div className="text-5xl font-semibold tracking-tight tabular-nums">
-            {latest.distance_km.toFixed(2)}
-            <span className="ml-1 text-[15px] font-medium text-text-muted">km</span>
+        <>
+          <div className={COLS + " mb-1 px-3 text-[10px] uppercase tracking-wider text-text-muted"}>
+            <span>When</span>
+            <span>Dist</span>
+            <span>Pace</span>
+            <span>Time</span>
+            <span className="text-right">HR</span>
           </div>
-          <div className="grid flex-1 grid-cols-2 gap-y-4 sm:grid-cols-4 sm:border-l sm:border-border">
-            <Metric label="Pace" value={formatPace(latest.avg_pace_s_per_km)}>
-              {paceDiff == null ? null : Math.abs(paceDiff) < 2 ? (
-                <span className="text-xs text-text-muted">In line with last {earlier.length}</span>
-              ) : (
-                <span className={"text-xs " + (paceDiff < 0 ? "text-positive" : "text-negative")}>
-                  {paceDiff < 0 ? "↑" : "↓"} {Math.round(Math.abs(paceDiff))}s vs last {earlier.length}
-                </span>
-              )}
-            </Metric>
-            <Metric label="Time" value={formatDuration(latest.duration_s)}>
-              <span className="text-xs text-text-muted">moving</span>
-            </Metric>
-            <Metric label="Avg HR" value={latest.avg_hr != null ? `${Math.round(latest.avg_hr)} bpm` : "--"} />
-            <Metric label="Cadence" value={latest.avg_cadence != null ? `${Math.round(latest.avg_cadence)} spm` : "--"} />
+          <div className="flex flex-col gap-2">
+            {runs.map((run, i) => {
+              const d = paceDiffAt(activities, i);
+              const treadmill = run.activity_type === "treadmill_running";
+              return (
+                <div
+                  key={run.id}
+                  className={
+                    COLS +
+                    " rounded-xl border px-3 py-2.5 " +
+                    (i === 0 ? "border-brand/30 bg-brand/10" : "border-border bg-surface-hover")
+                  }
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-semibold">{relativeDay(run.started_at)}</div>
+                    <div className={"text-[11px] " + (treadmill ? "text-violet" : "text-blue")}>
+                      {treadmill ? "Treadmill" : "Outdoor"}
+                    </div>
+                  </div>
+                  <div className="text-[15px] font-semibold tabular-nums">
+                    {run.distance_km.toFixed(2)}
+                    <span className="ml-0.5 text-[10px] font-medium text-text-muted">km</span>
+                  </div>
+                  <div>
+                    <div className="text-[13px] font-semibold tabular-nums">
+                      {formatPace(run.avg_pace_s_per_km).replace("/km", "")}
+                    </div>
+                    {d && Math.abs(d.diff) >= 2 ? (
+                      <div className={"text-[10.5px] " + (d.diff < 0 ? "text-positive" : "text-negative")}>
+                        {d.diff < 0 ? "↑" : "↓"} {Math.round(Math.abs(d.diff))}s
+                      </div>
+                    ) : (
+                      <div className="text-[10.5px] text-text-muted">{d ? "on par" : ""}</div>
+                    )}
+                  </div>
+                  <div className="text-[13px] font-semibold tabular-nums">{formatDuration(run.duration_s)}</div>
+                  <div className="text-right text-[13px] font-semibold tabular-nums">
+                    {run.avg_hr != null ? Math.round(run.avg_hr) : "--"}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </div>
+          <div className="mt-2.5 text-[11px] text-text-muted">
+            Pace arrows compare with your previous 5 runs of the same type
+          </div>
+        </>
       )}
     </div>
   );

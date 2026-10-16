@@ -9,6 +9,7 @@ import Header, { HeaderIconButton } from "@/components/Header";
 import { BellIcon, RefreshIcon, SwapIcon } from "@/components/icons";
 import { IntensityCard, SurfaceCard, TrainingEffectCard } from "@/components/dashboard/MixCards";
 import type { DashboardActivity } from "@/components/dashboard/mixStats";
+import { bestVdot, type PersonalRecord } from "@/components/analytics/records";
 import FitnessSnapshotCard from "@/components/FitnessSnapshotCard";
 import KpiCard, { Delta } from "@/components/KpiCard";
 import LatestRunCard from "@/components/LatestRunCard";
@@ -42,6 +43,7 @@ export default function DashboardPage() {
   const [mileageView, setMileageView] = useState<"weekly" | "monthly">("weekly");
   const [activityDates, setActivityDates] = useState<ActivityRow[] | null>(null);
   const [easyRuns, setEasyRuns] = useState<{ avg_pace_s_per_km: number }[] | null>(null);
+  const [records, setRecords] = useState<PersonalRecord[] | null>(null);
   const [races, setRaces] = useState<RaceListItem[] | null>(null);
   const [updating, setUpdating] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
@@ -72,6 +74,11 @@ export default function DashboardPage() {
       .then((res) => (res.ok ? res.json() : null))
       .then(setActivityDates)
       .catch(() => setActivityDates(null));
+
+    fetch("/api/personal-records")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setRecords)
+      .catch(() => setRecords(null));
 
     fetch("/api/races")
       .then((res) => (res.ok ? res.json() : null))
@@ -188,12 +195,16 @@ export default function DashboardPage() {
           </div>
           <WeekStripCard runs={activityDates} races={races} />
         </div>
-        <FitnessSnapshotCard
-          vo2Max={summary?.vo2_max}
-          easyPaceSPerKm={easyPace}
-          easyRunCount={easyPaces.length}
-          avgWeeklyKm={avgWeeklyKm}
-        />
+        <div className="flex flex-col gap-[18px]">
+          <FitnessSnapshotCard
+            vo2Max={summary?.vo2_max}
+            easyPaceSPerKm={easyPace}
+            easyRunCount={easyPaces.length}
+            avgWeeklyKm={avgWeeklyKm}
+            vdot={bestVdot(records)}
+          />
+          <LatestRunCard activities={activityDates} />
+        </div>
       </section>
 
       {/* Main grid: trends and last run on the left, habits and the week on the right. */}
@@ -226,7 +237,6 @@ export default function DashboardPage() {
               <EmptyPlaceholder label="Loading..." />
             )}
           </Card>
-          <LatestRunCard activities={activityDates} />
         </div>
       </section>
     </div>
