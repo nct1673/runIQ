@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_snapshot",
+      "Bash(docker compose logs *)",
+      "mcp__playwright__browser_console_messages",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx tsc --noEmit -p tsconfig.json)",
+      "Bash(npx tsc --noEmit -p .)",
+      "mcp__playwright__browser_find",
+      "Bash(alembic current)",
+      "mcp__playwright__browser_wait_for"
+    ]
+  }
+}

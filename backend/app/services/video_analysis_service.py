@@ -48,6 +48,11 @@ class VideoConversionError(ValueError):
 ALLOWED_SUFFIXES = frozenset(VIDEO_MIME)
 _MP4_MOV_ATOMS = {b"ftyp", b"moov", b"mdat", b"wide", b"free", b"skip"}
 # Network/other protocols are never needed for a plain local file.
+# (QuickTime "reference movies" -- external data references -- are not
+# followed either: the mov demuxer's -enable_drefs is off by default.
+# It can't be passed here, since it's a mov-only option and ffmpeg errors
+# on it for other containers; tests/test_video_reference_movie.py fails
+# if an ffmpeg upgrade ever changes that default.)
 FFMPEG_INPUT_GUARD = ["-protocol_whitelist", "file"]
 
 
