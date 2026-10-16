@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-import Card, { EmptyPlaceholder } from "@/components/Card";
-import MonthlyMileageChart, { MonthlyMileagePoint } from "@/components/charts/MonthlyMileageChart";
-import WeeklyMileageChart, { WeeklyMileagePoint } from "@/components/charts/WeeklyMileageChart";
+import type { WeeklyMileagePoint } from "@/components/charts/WeeklyMileageChart";
 import Header, { HeaderIconButton } from "@/components/Header";
-import { BellIcon, RefreshIcon, SwapIcon } from "@/components/icons";
+import { BellIcon, RefreshIcon } from "@/components/icons";
 import { IntensityCard, SurfaceCard, TrainingEffectCard } from "@/components/dashboard/MixCards";
 import type { DashboardActivity } from "@/components/dashboard/mixStats";
 import { bestVdot, type PersonalRecord } from "@/components/analytics/records";
@@ -39,8 +37,6 @@ export default function DashboardPage() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [weeklyMileage, setWeeklyMileage] = useState<WeeklyMileagePoint[] | null>(null);
-  const [monthlyMileage, setMonthlyMileage] = useState<MonthlyMileagePoint[] | null>(null);
-  const [mileageView, setMileageView] = useState<"weekly" | "monthly">("weekly");
   const [activityDates, setActivityDates] = useState<ActivityRow[] | null>(null);
   const [easyRuns, setEasyRuns] = useState<{ avg_pace_s_per_km: number }[] | null>(null);
   const [records, setRecords] = useState<PersonalRecord[] | null>(null);
@@ -64,11 +60,6 @@ export default function DashboardPage() {
       .then((res) => (res.ok ? res.json() : null))
       .then(setWeeklyMileage)
       .catch(() => setWeeklyMileage(null));
-
-    fetch("/api/analytics/monthly-mileage?months=12")
-      .then((res) => (res.ok ? res.json() : null))
-      .then(setMonthlyMileage)
-      .catch(() => setMonthlyMileage(null));
 
     fetch("/api/activities")
       .then((res) => (res.ok ? res.json() : null))
@@ -204,39 +195,6 @@ export default function DashboardPage() {
             vdot={bestVdot(records)}
           />
           <LatestRunCard activities={activityDates} />
-        </div>
-      </section>
-
-      {/* Main grid: trends and last run on the left, habits and the week on the right. */}
-      <section className="grid grid-cols-1 gap-[18px] lg:grid-cols-[1.6fr_1fr]">
-        <div className="flex flex-col gap-[18px]">
-          <Card>
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <i className="inline-block h-2 w-2 rounded-full bg-violet" />
-                {mileageView === "weekly" ? "Weekly mileage" : "Monthly mileage"}
-              </div>
-              <button
-                type="button"
-                onClick={() => setMileageView((v) => (v === "weekly" ? "monthly" : "weekly"))}
-                title={`Switch to ${mileageView === "weekly" ? "monthly" : "weekly"} view`}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted hover:bg-surface-hover hover:text-text"
-              >
-                <SwapIcon className="h-4 w-4" />
-              </button>
-            </div>
-            {mileageView === "weekly" ? (
-              weeklyMileage ? (
-                <WeeklyMileageChart data={weeklyMileage} />
-              ) : (
-                <EmptyPlaceholder label="Loading..." />
-              )
-            ) : monthlyMileage ? (
-              <MonthlyMileageChart data={monthlyMileage} />
-            ) : (
-              <EmptyPlaceholder label="Loading..." />
-            )}
-          </Card>
         </div>
       </section>
     </div>
