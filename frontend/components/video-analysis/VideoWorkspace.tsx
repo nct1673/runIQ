@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import Card from "@/components/Card";
-import FormSeriesChart from "@/components/charts/FormSeriesChart";
-import type { AnalysisResult, VideoAnalysis } from "@/components/video-analysis/types";
-
-const deg = (vs: number[]) => (vs.length ? vs.map((v) => `${v.toFixed(1)}°`).join(" / ") : "–");
+import AiAnalysePanel from "@/components/video-analysis/AiAnalysePanel";
+import CheckFrames from "@/components/video-analysis/CheckFrames";
+import PhaseCards from "@/components/video-analysis/PhaseCards";
+import StrideTimeline from "@/components/video-analysis/StrideTimeline";
+import type { VideoAnalysis } from "@/components/video-analysis/types";
+import VideoPlayer from "@/components/video-analysis/VideoPlayer";
 
 interface VideoFrameMeta {
   mediaTime: number;
@@ -16,25 +17,21 @@ interface VideoWithFrameCallback {
   cancelVideoFrameCallback?: (handle: number) => void;
 }
 
-function MetricTile({ label, value, hint }: { label: string; value: string; hint: string }) {
+function SectionTitle({ children, note }: { children: React.ReactNode; note?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-bg p-3">
-      <div className="text-xs text-text-muted">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-text">{value}</div>
-      <div className="mt-0.5 text-[11px] text-text-muted">{hint}</div>
+    <div className="mb-3.5 mt-7 flex items-center gap-3 text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+      {children}
+      <span className="h-px flex-1 bg-border" />
+      {note && <em className="order-2 text-[13px] font-medium normal-case not-italic tracking-normal text-text-muted">{note}</em>}
     </div>
   );
 }
 
 /**
- * The data side of a video: a pinned player, the metric tiles, the five
- * charts and the annotated check frames. Layout is driven by *container*
- * width (not viewport), so opening the AI Analyse dock next to it just
- * re-flows this area instead of squashing it:
- *   wide  -> player pinned on the left, data scrolling on the right
- *   narrow -> everything stacked
- * The charts draw a playhead that follows the video, and clicking a chart,
- * a check frame or a jump chip seeks the video (needs `fps` in the result).
+ * Everything under the page header for one video: player + AI coach, metrics
+ * by stride phase, the synced stride timeline and the check frames. This
+ * component owns the <video> element and the playhead so the timeline and
+ * check frames can seek it (needs `fps` in the result).
  */
 export default function VideoWorkspace({ video }: { video: VideoAnalysis }) {
   const result = video.result;
@@ -78,169 +75,44 @@ export default function VideoWorkspace({ video }: { video: VideoAnalysis }) {
     [fps, synced],
   );
 
-  const player = (
-    <div className="flex flex-col gap-2">
-      <video
-        ref={videoRef}
-        key={video.id}
-        controls
-        playsInline
-        preload="metadata"
-        src={`/api/video-analysis/${video.id}/video`}
-        className="w-full rounded-xl border border-border bg-black"
-      />
-      {result && synced && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] text-text-muted">Jump to</span>
-          {[
-            ...result.touchdown_frames.map((f) => ({ f, kind: "Touchdown", color: "var(--color-negative)" })),
-            ...result.midstance_frames.map((f) => ({ f, kind: "Midstance", color: "var(--color-positive)" })),
-          ]
-            .sort((a, b) => a.f - b.f)
-            .map(({ f, kind, color }) => (
-              <button
-                key={`${kind}${f}`}
-                type="button"
-                onClick={() => seekToFrame(f)}
-                className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-text-muted hover:bg-surface-hover hover:text-text"
-              >
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
-                {kind} {f}
-              </button>
-            ))}
-        </div>
+  const frame = synced ? currentFrame : null;
+  const onSeek = synced ? seekToFrame : undefined;
+
+  return (
+    <div>
+      {result && (
+        <>
+          {result.warnings.map((w) => (
+            <p key={w} className="mb-3 text-xs text-negative">
+              {w}
+            </p>
+          ))}
+        </>
       )}
-    </div>
-  );
 
-  if (!result) {
-    return <div className="max-w-2xl">{player}</div>;
-  }
+      <section className="grid grid-cols-1 gap-[18px] xl:grid-cols-[minmax(0,1fr)_400px]">
+        <VideoPlayer videoId={video.id} videoRef={videoRef} result={result} currentFrame={frame} seekToFrame={seekToFrame} />
+        <AiAnalysePanel key={video.id} videoId={video.id} filename={video.original_filename} />
+      </section>
 
-  return (
-    <div className="grid gap-4 @4xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-      <div className="@4xl:sticky @4xl:top-0 @4xl:self-start">{player}</div>
-      <ResultsPanel id={video.id} result={result} currentFrame={synced ? currentFrame : null} onSeek={synced ? seekToFrame : undefined} />
-    </div>
-  );
-}
+      {result && (
+        <>
+          <SectionTitle note="Strides 1 / 2 · green band = typical range">Metrics by stride phase</SectionTitle>
+          <PhaseCards result={result} />
 
-function ResultsPanel({
-  id,
-  result,
-  currentFrame,
-  onSeek,
-}: {
-  id: string;
-  result: AnalysisResult;
-  currentFrame: number | null;
-  onSeek?: (frame: number) => void;
-}) {
-  const m = result.metrics;
-  const shared = {
-    touchdowns: result.touchdown_frames,
-    midstances: result.midstance_frames,
-    currentFrame,
-    onSeek,
-  };
+          <SectionTitle note={onSeek ? "Synced with the video · click anywhere to jump" : "Synced with the video"}>Stride timeline</SectionTitle>
+          <StrideTimeline result={result} currentFrame={frame} onSeek={onSeek} />
 
-  return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <div className="text-xs text-text-muted">
-        Facing {result.facing}, near side {result.near_side} · {result.strides_analyzed} complete stride
-        {result.strides_analyzed === 1 ? "" : "s"} analyzed
-      </div>
-      {result.warnings.map((w) => (
-        <p key={w} className="text-xs text-negative">
-          {w}
-        </p>
-      ))}
-
-      <div className="grid grid-cols-2 gap-3">
-        <MetricTile label="Shank angle at touchdown" value={deg(m.shank_angle_td)} hint="0° = vertical; + = foot lands ahead of knee" />
-        <MetricTile
-          label="Foot ahead of hip"
-          value={m.overstride_calf_td.length ? m.overstride_calf_td.map((v) => v.toFixed(2)).join(" / ") : "–"}
-          hint="At touchdown, in calf lengths"
-        />
-        <MetricTile label="Knee flexion at touchdown" value={deg(m.knee_flexion_td)} hint="0° = straight leg" />
-        <MetricTile label="Knee flexion at midstance" value={deg(m.knee_flexion_ms)} hint="Shock absorption" />
-        <MetricTile label="Trunk lean" value={m.trunk_lean != null ? `${m.trunk_lean.toFixed(1)}°` : "–"} hint="Stride average; + = forward" />
-        <MetricTile label="Elbow angle" value={m.elbow_angle != null ? `${m.elbow_angle.toFixed(0)}°` : "–"} hint="Stride average" />
-        <MetricTile
-          label="Arm swing range"
-          value={m.arm_swing ? `${m.arm_swing.range.toFixed(0)}°` : "–"}
-          hint={m.arm_swing ? `${m.arm_swing.min.toFixed(0)}° to ${m.arm_swing.max.toFixed(0)}° from vertical` : ""}
-        />
-      </div>
-      <p className="text-[11px] text-text-muted">
-        2D side-view estimates from one video -- best for comparing the same runner over time, not as absolute targets.
-        {onSeek && " Click a chart to jump the video to that frame."}
-      </p>
-
-      <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @4xl:grid-cols-1">
-        <Card title="Ankle position relative to hip (px)">
-          <FormSeriesChart
-            data={result.charts.ankle_wave ?? []}
-            series={[
-              { key: "right", label: "Right ankle", color: "var(--color-stat-runs)" },
-              { key: "left", label: "Left ankle", color: "var(--color-stat-time)" },
-            ]}
-            {...shared}
-          />
-        </Card>
-        <Card title="Knee angle">
-          <FormSeriesChart
-            data={result.charts.knee_angle ?? []}
-            series={[{ key: "value", label: "Knee angle", color: "var(--color-stat-distance)" }]}
-            unit="°"
-            {...shared}
-          />
-        </Card>
-        <Card title="Trunk lean">
-          <FormSeriesChart
-            data={result.charts.trunk_lean ?? []}
-            series={[{ key: "value", label: "Trunk lean", color: "var(--color-mileage)" }]}
-            unit="°"
-            {...shared}
-          />
-        </Card>
-        <Card title="Elbow angle">
-          <FormSeriesChart
-            data={result.charts.elbow_angle ?? []}
-            series={[{ key: "value", label: "Elbow angle", color: "var(--color-stat-energy)" }]}
-            unit="°"
-            {...shared}
-          />
-        </Card>
-        <Card title="Upper-arm swing">
-          <FormSeriesChart
-            data={result.charts.arm_swing ?? []}
-            series={[{ key: "value", label: "Arm swing", color: "var(--color-stat-time)" }]}
-            unit="°"
-            {...shared}
-          />
-        </Card>
-      </div>
-
-      {result.check_frames.length > 0 && (
-        <Card title="Check frames">
-          <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
-            {result.check_frames.map((f) => (
-              <button
-                key={f.file}
-                type="button"
-                onClick={() => onSeek?.(f.frame)}
-                disabled={!onSeek}
-                title={onSeek ? "Jump the video to this frame" : undefined}
-                className="overflow-hidden rounded-xl border border-border text-left enabled:hover:border-text-muted"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`/api/video-analysis/${id}/frames/${f.file}`} alt={`${f.kind} at frame ${f.frame}`} className="w-full" />
-              </button>
-            ))}
-          </div>
-        </Card>
+          {result.check_frames.length > 0 && (
+            <>
+              <SectionTitle note={onSeek ? "Click to open in the player" : undefined}>Check frames</SectionTitle>
+              <CheckFrames id={video.id} result={result} currentFrame={frame} onSeek={onSeek} />
+            </>
+          )}
+          <p className="mt-4 text-xs leading-relaxed text-text-muted">
+            2D side-view estimates from one video. Best for comparing your own videos over time, not as absolute targets.
+          </p>
+        </>
       )}
     </div>
   );

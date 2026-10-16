@@ -1,4 +1,5 @@
 import { EmptyPlaceholder } from "@/components/Card";
+import NextRaceCard from "@/components/NextRaceCard";
 
 export interface WeekRun {
   started_at: string;
@@ -17,7 +18,7 @@ function key(d: Date): string {
 }
 
 /** Mon-Sun strip for the current week (runs done, races upcoming) plus the
- * next few races below it. */
+ * next-race card below it. */
 export default function WeekStripCard({ runs, races }: { runs: WeekRun[] | null; races: WeekRace[] | null }) {
   const today = new Date();
   const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
@@ -31,8 +32,6 @@ export default function WeekStripCard({ runs, races }: { runs: WeekRun[] | null;
   }
   const raceByDay = new Map<string, WeekRace>();
   for (const r of races ?? []) raceByDay.set(r.race_date, r);
-
-  const upcoming = (races ?? []).filter((r) => r.race_date >= todayKey).sort((a, b) => a.race_date.localeCompare(b.race_date)).slice(0, 3);
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-[22px] shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
@@ -80,28 +79,9 @@ export default function WeekStripCard({ runs, races }: { runs: WeekRun[] | null;
             })}
           </div>
 
-          {upcoming.length > 0 && (
-            <div className="mt-4 border-t border-border">
-              {upcoming.map((r) => {
-                const d = new Date(r.race_date + "T00:00:00");
-                return (
-                  <div key={r.race_date + r.name} className="flex items-center gap-3 border-b border-border py-3 last:border-b-0 last:pb-0">
-                    <div className="w-11 text-center">
-                      <small className="block text-[10px] uppercase text-text-muted">
-                        {d.toLocaleDateString(undefined, { month: "short" })}
-                      </small>
-                      <b className="text-[17px] font-semibold">{d.getDate()}</b>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <b className="block truncate text-[13.5px] font-semibold">{r.name}</b>
-                      <span className="text-xs text-text-muted">{r.distance_km.toFixed(1)} km</span>
-                    </div>
-                    <span className="rounded-full bg-brand/15 px-2.5 py-1 text-[11px] font-semibold text-[#ff8fb8]">Race day</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <div className="mt-4 border-t border-border pt-4">
+            <NextRaceCard />
+          </div>
         </>
       )}
     </div>

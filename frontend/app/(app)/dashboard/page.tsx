@@ -7,11 +7,11 @@ import MonthlyMileageChart, { MonthlyMileagePoint } from "@/components/charts/Mo
 import WeeklyMileageChart, { WeeklyMileagePoint } from "@/components/charts/WeeklyMileageChart";
 import Header, { HeaderIconButton } from "@/components/Header";
 import { BellIcon, RefreshIcon, SwapIcon } from "@/components/icons";
-import { weeksStreak } from "@/components/ConsistencyCard";
+import { IntensityCard, SurfaceCard, TrainingEffectCard } from "@/components/dashboard/MixCards";
+import type { DashboardActivity } from "@/components/dashboard/mixStats";
 import FitnessSnapshotCard from "@/components/FitnessSnapshotCard";
 import KpiCard, { Delta } from "@/components/KpiCard";
-import LatestRunCard, { LatestRunActivity } from "@/components/LatestRunCard";
-import NextRaceCard from "@/components/NextRaceCard";
+import LatestRunCard from "@/components/LatestRunCard";
 import WeekStripCard from "@/components/WeekStripCard";
 
 interface Summary {
@@ -20,7 +20,7 @@ interface Summary {
 }
 
 // /api/activities rows: enough for the calendar (date + distance) and the Latest Run card.
-type ActivityRow = LatestRunActivity;
+type ActivityRow = DashboardActivity;
 
 interface RaceListItem {
   name: string;
@@ -93,7 +93,9 @@ export default function DashboardPage() {
     setUpdateStatus(null);
 
     try {
-      const res = await fetch("/api/activities/sync-garmin", { method: "POST" });
+      const res = await fetch("/api/activities/sync-garmin", {
+        method: "POST",
+      });
       if (!res.ok) throw new Error(await res.text());
       loadDashboardData(); // reflect the new activities everywhere right away
 
@@ -103,7 +105,9 @@ export default function DashboardPage() {
       // anymore (moved to /analytics) -- this just keeps the data
       // fresh for whenever that page is next opened.
       try {
-        const prRes = await fetch("/api/personal-records/sync", { method: "POST" });
+        const prRes = await fetch("/api/personal-records/sync", {
+          method: "POST",
+        });
         if (!prRes.ok) throw new Error(await prRes.text());
       } catch (prErr) {
         setUpdateStatus(`Activities updated, but personal records sync failed: ${(prErr as Error).message}`);
@@ -117,28 +121,16 @@ export default function DashboardPage() {
 
   const now = new Date();
   const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening";
-  const eyebrow = now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  const eyebrow = now.toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 
   // ---- derived display numbers (all from the endpoints already loaded) ----
   const thisWeek = weeklyMileage?.[weeklyMileage.length - 1];
   const lastWeek = weeklyMileage && weeklyMileage.length > 1 ? weeklyMileage[weeklyMileage.length - 2] : undefined;
   const weekDiffKm = thisWeek && lastWeek ? thisWeek.distance_km - lastWeek.distance_km : null;
-
-  const thisMonth = monthlyMileage?.[monthlyMileage.length - 1];
-  const lastMonth = monthlyMileage && monthlyMileage.length > 1 ? monthlyMileage[monthlyMileage.length - 2] : undefined;
-  const monthDiffPct =
-    thisMonth && lastMonth && lastMonth.distance_km > 0
-      ? ((thisMonth.distance_km - lastMonth.distance_km) / lastMonth.distance_km) * 100
-      : null;
-  const daysInThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-
-  const yearToDateKm = monthlyMileage
-    ? monthlyMileage
-        .filter((m) => m.month_start.startsWith(String(now.getFullYear())))
-        .reduce((sum, m) => sum + m.distance_km, 0)
-    : null;
-
-  const streak = weeksStreak(weeklyMileage);
 
   // Easy-run pace: mean over the last 2 months of easy runs.
   const easyPaces = (easyRuns ?? []).map((r) => r.avg_pace_s_per_km);
@@ -169,72 +161,39 @@ export default function DashboardPage() {
 
       {updateStatus && <p className="-mt-3 mb-4 text-sm text-text-muted">{updateStatus}</p>}
 
-      {/* Hero: where I'm heading and this period's totals, beside how my fitness looks right now. */}
+      {/* Hero: this week + the last 30 days, then the week strip with the next race, beside how my fitness looks right now. */}
       <section className="mb-[18px] grid grid-cols-1 gap-[18px] lg:grid-cols-[7fr_3fr]">
-        <NextRaceCard />
+        {/* This week + how the last 30 days were spent: surface, intensity, run types. */}
+        <div className="flex flex-col gap-[18px] lg:col-start-1 lg:row-start-1">
+          <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 xl:grid-cols-4">
+            <KpiCard
+              accent="#b6f35a"
+              label="This week"
+              hint="Mon-Sun"
+              value={thisWeek ? thisWeek.distance_km.toFixed(1) : "--"}
+              unit="km"
+              footLeft={thisWeek ? `${thisWeek.runs} ${thisWeek.runs === 1 ? "run" : "runs"}` : undefined}
+              footRight={
+                weekDiffKm != null && lastWeek ? (
+                  <Delta
+                    value={weekDiffKm}
+                    text={`${weekDiffKm > 0 ? "+" : weekDiffKm < 0 ? "-" : ""}${Math.abs(weekDiffKm).toFixed(1)} km vs last wk`}
+                  />
+                ) : undefined
+              }
+            />
+            <SurfaceCard activities={activityDates} />
+            <IntensityCard activities={activityDates} />
+            <TrainingEffectCard activities={activityDates} />
+          </div>
+          <WeekStripCard runs={activityDates} races={races} />
+        </div>
         <FitnessSnapshotCard
           vo2Max={summary?.vo2_max}
           easyPaceSPerKm={easyPace}
           easyRunCount={easyPaces.length}
           avgWeeklyKm={avgWeeklyKm}
         />
-        {/* KPI cards: this week / this month / streak / year to date. */}
-        <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:col-start-1">
-          <KpiCard
-            accent="#b6f35a"
-            label="This week"
-            hint="Mon-Sun"
-            value={thisWeek ? thisWeek.distance_km.toFixed(1) : "--"}
-            unit="km"
-            footLeft={thisWeek ? `${thisWeek.runs} ${thisWeek.runs === 1 ? "run" : "runs"}` : undefined}
-            footRight={
-              weekDiffKm != null && lastWeek ? (
-                <Delta value={weekDiffKm} text={`${weekDiffKm > 0 ? "+" : weekDiffKm < 0 ? "-" : ""}${Math.abs(weekDiffKm).toFixed(1)} km vs last wk`} />
-              ) : undefined
-            }
-          />
-          <KpiCard
-            accent="#38d6ff"
-            label={now.toLocaleDateString(undefined, { month: "long" })}
-            hint={`${now.getDate()} of ${daysInThisMonth} days`}
-            value={thisMonth ? thisMonth.distance_km.toFixed(1) : "--"}
-            unit="km"
-            footLeft={lastMonth ? `Last month ${lastMonth.distance_km.toFixed(0)} km` : undefined}
-            footRight={
-              monthDiffPct != null ? (
-                <Delta value={monthDiffPct} text={`${monthDiffPct > 0 ? "+" : "-"}${Math.abs(monthDiffPct).toFixed(0)}% vs last month`} />
-              ) : undefined
-            }
-          />
-          <KpiCard
-            accent="#ffb938"
-            label="Streak"
-            hint="Weeks with a run"
-            value={String(streak)}
-            unit={streak === 1 ? "week" : "weeks"}
-            visual={
-              weeklyMileage ? (
-                <div className="flex gap-1">
-                  {weeklyMileage.map((w) => (
-                    <i
-                      key={w.week_start}
-                      className={"h-[5px] flex-1 rounded-sm " + (w.runs > 0 ? "bg-[linear-gradient(90deg,#ffb938,#ff7a45)]" : "bg-border")}
-                    />
-                  ))}
-                </div>
-              ) : undefined
-            }
-            footLeft={weeklyMileage ? `Last ${weeklyMileage.length} weeks` : undefined}
-          />
-          <KpiCard
-            accent="#a27bff"
-            label="Year to date"
-            hint={String(now.getFullYear())}
-            value={yearToDateKm != null ? yearToDateKm.toFixed(0) : "--"}
-            unit="km"
-            footLeft="Since 1 Jan"
-          />
-        </div>
       </section>
 
       {/* Main grid: trends and last run on the left, habits and the week on the right. */}
@@ -268,10 +227,6 @@ export default function DashboardPage() {
             )}
           </Card>
           <LatestRunCard activities={activityDates} />
-        </div>
-
-        <div className="flex flex-col gap-[18px]">
-          <WeekStripCard runs={activityDates} races={races} />
         </div>
       </section>
     </div>

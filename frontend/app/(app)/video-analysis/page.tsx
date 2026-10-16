@@ -2,23 +2,27 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import Header from "@/components/Header";
-import AiAnalysePanel from "@/components/video-analysis/AiAnalysePanel";
 import type { VideoAnalysis } from "@/components/video-analysis/types";
 import VideoWorkspace from "@/components/video-analysis/VideoWorkspace";
-import { PencilIcon, PlusIcon, RefreshIcon, SparklesIcon, TrashIcon, VideoIcon } from "@/components/icons";
+import { PencilIcon, RefreshIcon, TrashIcon, UploadIcon, VideoIcon } from "@/components/icons";
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: "Pending",
-  processing: "Processing",
-  completed: "Completed",
+  pending: "Not analysed",
+  processing: "Analysing…",
+  completed: "Analysed",
   failed: "Failed",
 };
-const STATUS_COLOR: Record<string, string> = {
+const STATUS_PILL: Record<string, string> = {
   pending: "bg-surface-hover text-text-muted",
-  processing: "bg-stat-time text-white",
-  completed: "bg-positive text-white",
-  failed: "bg-negative text-white",
+  processing: "bg-amber/15 text-amber",
+  completed: "bg-positive/10 text-positive",
+  failed: "bg-negative/15 text-negative",
+};
+const STATUS_TEXT: Record<string, string> = {
+  pending: "text-text-muted",
+  processing: "text-amber",
+  completed: "text-positive",
+  failed: "text-negative",
 };
 
 function formatFileSize(bytes: number | null): string {
@@ -34,6 +38,9 @@ const STATUS_DOT: Record<string, string> = {
   failed: "bg-negative",
 };
 
+const fmtShort = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+
 /**
  * Upload side-view running videos and get form feedback. Same layout as
  * /coach: a left list of uploaded videos (like conversations) and a main
@@ -46,7 +53,7 @@ export default function VideoAnalysisPage() {
   const [uploading, setUploading] = useState(false);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -74,10 +81,13 @@ export default function VideoAnalysisPage() {
     return () => clearInterval(timer);
   }, [anyProcessing]);
 
-  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-selecting the same file later
-    if (!file) return;
+    if (file) void uploadFile(file);
+  }
+
+  async function uploadFile(file: File) {
 
     setUploading(true);
     setError(null);
@@ -149,36 +159,61 @@ export default function VideoAnalysisPage() {
   }
 
   const busy = video != null && (analyzingId === video.id || video.status === "processing");
+  const result = video?.result;
 
   return (
-    <div>
-      <Header title="Video Analysis" subtitle="Upload side-view running videos and pick one to see feedback on your form." />
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[270px_minmax(0,1fr)]">
+      <aside className="lg:-mt-1">
+        <h2 className="mb-3.5 flex justify-between text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          Videos <span className="font-medium text-text-muted">{videos?.length ?? ""}</span>
+        </h2>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) void uploadFile(file);
+          }}
+          className={
+            "w-full rounded-[14px] border-[1.5px] border-dashed p-4 text-center disabled:cursor-not-allowed disabled:opacity-60 " +
+            (dragging ? "border-violet bg-violet/15" : "border-border-strong bg-violet/5 hover:bg-violet/10")
+          }
+        >
+          <div className="mx-auto mb-2.5 grid h-[38px] w-[38px] place-items-center rounded-[11px] bg-violet/15 text-[#c9b6ff]">
+            <UploadIcon className="h-5 w-5" />
+          </div>
+          <b className="block text-[13.5px] font-semibold">{uploading ? "Uploading..." : "Upload a running video"}</b>
+          <p className="mt-1.5 text-[11.5px] leading-normal text-text-muted">
+            Drag &amp; drop or click · MP4, MOV
+            <br />
+            Side view, 10 s or longer
+          </p>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/mp4,video/quicktime,video/webm,video/x-msvideo"
+          onChange={handleFileSelected}
+          className="hidden"
+        />
 
-      <div className="flex h-[calc(100vh-9rem)] gap-4">
-        <aside className="flex w-56 shrink-0 flex-col gap-2 overflow-y-auto rounded-2xl border border-border bg-surface p-3">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm text-text hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <PlusIcon className="h-4 w-4" />
-            {uploading ? "Uploading..." : "Upload video"}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="video/mp4,video/quicktime,video/webm,video/x-msvideo"
-            onChange={handleFileSelected}
-            className="hidden"
-          />
-          <div className="flex flex-col gap-1">
-            {videos?.map((v) => (
+        <div className="mt-5 flex flex-col gap-2">
+          {videos?.map((v) => {
+            const active = v.id === activeId;
+            return (
               <div
                 key={v.id}
                 className={
-                  "group flex items-center rounded-xl " +
-                  (v.id === activeId ? "bg-brand text-white" : "text-text-muted hover:bg-surface-hover hover:text-text")
+                  "group flex items-center gap-1 rounded-xl border p-2 " +
+                  (active ? "border-violet/45 bg-surface-hover" : "border-transparent hover:bg-surface")
                 }
               >
                 {renamingId === v.id ? (
@@ -192,7 +227,7 @@ export default function VideoAnalysisPage() {
                       if (e.key === "Enter") commitRename();
                       if (e.key === "Escape") setRenamingId(null);
                     }}
-                    className="m-1 min-w-0 flex-1 rounded-lg border border-border bg-bg px-2 py-1 text-sm text-text outline-none"
+                    className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-2 py-1 text-sm text-text outline-none"
                   />
                 ) : (
                   <>
@@ -200,144 +235,141 @@ export default function VideoAnalysisPage() {
                       type="button"
                       onClick={() => setActiveId(v.id)}
                       onDoubleClick={(e) => startRename(v, e)}
-                      className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm"
+                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                     >
-                      <span
-                        className={"h-2 w-2 shrink-0 rounded-full " + (v.id === activeId ? "bg-white" : STATUS_DOT[v.status])}
-                        title={STATUS_LABEL[v.status]}
-                      />
-                      <span className="truncate">{v.original_filename}</span>
+                      <div className="grid h-11 w-[72px] shrink-0 place-items-center rounded-lg bg-[linear-gradient(135deg,#2a2650,#1c1b36)] text-text-muted">
+                        <VideoIcon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <b className="block truncate text-[13px] font-semibold">{v.original_filename}</b>
+                        <span className="mt-0.5 block text-[11px] text-text-muted">
+                          {fmtShort(v.uploaded_at)}
+                          {v.file_size_bytes != null ? ` · ${formatFileSize(v.file_size_bytes)}` : ""}
+                        </span>
+                        <span className={"mt-1 inline-flex items-center gap-1.5 text-[10.5px] font-semibold " + STATUS_TEXT[v.status]}>
+                          <i className={"h-1.5 w-1.5 rounded-full " + STATUS_DOT[v.status]} />
+                          {STATUS_LABEL[v.status]}
+                        </span>
+                      </div>
                     </button>
-                    <button
-                      type="button"
-                      onClick={(e) => startRename(v, e)}
-                      aria-label="Rename video"
-                      title="Rename video"
-                      className={
-                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 " +
-                        (v.id === activeId ? "hover:bg-white/20" : "hover:bg-surface-hover hover:text-text")
-                      }
-                    >
-                      <PencilIcon className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex shrink-0 flex-col opacity-0 group-hover:opacity-100">
+                      <button
+                        type="button"
+                        onClick={(e) => startRename(v, e)}
+                        aria-label="Rename video"
+                        title="Rename video"
+                        className="flex h-6 w-6 items-center justify-center rounded-lg text-text-muted hover:bg-surface hover:text-text"
+                      >
+                        <PencilIcon className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDelete(v.id, e)}
+                        aria-label="Delete video"
+                        title="Delete video"
+                        className="flex h-6 w-6 items-center justify-center rounded-lg text-text-muted hover:bg-surface hover:text-negative"
+                      >
+                        <TrashIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </>
                 )}
-                <button
-                  type="button"
-                  onClick={(e) => handleDelete(v.id, e)}
-                  aria-label="Delete video"
-                  title="Delete video"
-                  className={
-                    "mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 " +
-                    (v.id === activeId ? "hover:bg-white/20" : "hover:bg-surface-hover hover:text-negative")
-                  }
-                >
-                  <TrashIcon className="h-3.5 w-3.5" />
-                </button>
               </div>
-            ))}
-            {videos && videos.length === 0 && <p className="px-3 py-2 text-sm text-text-muted">No videos yet.</p>}
+            );
+          })}
+          {videos && videos.length === 0 && <p className="px-2 py-1 text-sm text-text-muted">No videos yet.</p>}
+        </div>
+
+        <div className="mt-[22px] rounded-xl border border-border bg-surface p-3.5 text-xs leading-relaxed text-text-soft">
+          <b className="mb-1.5 block text-[12.5px] text-text">📹 For the best analysis</b>
+          <ul className="ml-4 list-disc text-text-muted">
+            <li>Film from the side, at hip height</li>
+            <li>Capture 10+ seconds (4+ strides)</li>
+            <li>60 fps if your phone supports it</li>
+          </ul>
+        </div>
+      </aside>
+
+      <main className="min-w-0">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">Video analysis</div>
+            <h1 className="mt-1 flex items-center gap-3 text-[26px] font-semibold tracking-tight">
+              <span className="truncate">{video ? video.original_filename : "Video Analysis"}</span>
+              {video && (
+                <span className={"shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-normal " + STATUS_PILL[video.status]}>
+                  {video.status === "completed" ? "Analysis complete" : STATUS_LABEL[video.status]}
+                </span>
+              )}
+            </h1>
+            <div className="mt-1.5 text-[13px] text-text-soft">
+              {video
+                ? [
+                    new Date(video.uploaded_at).toLocaleString(undefined, {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    }),
+                    result ? `facing ${result.facing}, near side ${result.near_side}` : null,
+                    result ? `${result.strides_analyzed} complete stride${result.strides_analyzed === 1 ? "" : "s"}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                : "Upload side-view running videos and pick one to see feedback on your form."}
+            </div>
           </div>
-        </aside>
-
-        <div className="flex min-w-0 flex-1 overflow-hidden rounded-2xl border border-border bg-surface">
-          {/* Main column: fixed header + its own scroll area, so the chat dock never moves the data. */}
-          <div className="flex min-w-0 flex-1 flex-col">
-            {!video ? (
-              <div className="p-5">
-                {error && <p className="mb-4 text-sm text-negative">{error}</p>}
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-stat-time">
-                    <VideoIcon className="h-5 w-5 text-white" />
-                  </div>
-                  <div className="text-sm text-text-muted">
-                    <p className="text-text">
-                      {videos == null
-                        ? "Loading..."
-                        : videos.length === 0
-                          ? "Upload a video to get started."
-                          : "Select a video on the left."}
-                    </p>
-                    <p className="mt-1 text-text">Film from the side, not the front or back.</p>
-                    <p className="mt-1">
-                      A clean side-on view is what form analysis needs to read things like trunk lean, knee drive,
-                      and overstride. A few steady seconds at a consistent distance from the camera works best.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-5 py-4">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stat-time">
-                      <VideoIcon className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-text">{video.original_filename}</div>
-                      <div className="text-xs text-text-muted">
-                        {new Date(video.uploaded_at).toLocaleString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                        {video.file_size_bytes != null ? ` · ${formatFileSize(video.file_size_bytes)}` : ""}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className={"rounded-full px-3 py-1 text-xs font-medium " + STATUS_COLOR[video.status]}>
-                      {STATUS_LABEL[video.status] ?? video.status}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleAnalyze(video.id)}
-                      disabled={busy}
-                      className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-medium text-text-muted hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <RefreshIcon className={"h-3.5 w-3.5" + (busy ? " animate-spin" : "")} />
-                      {busy ? "Analyzing..." : video.status === "completed" ? "Re-analyze" : "Analyze"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setChatOpen((o) => !o)}
-                      aria-pressed={chatOpen}
-                      className={
-                        "flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium " +
-                        (chatOpen ? "bg-brand text-white" : "border border-border text-text-muted hover:text-text")
-                      }
-                    >
-                      <SparklesIcon className="h-3.5 w-3.5" />
-                      AI Analyse
-                    </button>
-                  </div>
-                </div>
-
-                {/* @container: the workspace lays itself out by THIS width, not the viewport's. */}
-                <div className="@container min-h-0 flex-1 overflow-y-auto p-5">
-                  {error && <p className="mb-4 text-sm text-negative">{error}</p>}
-                  {video.status === "pending" && (
-                    <p className="mb-4 text-sm text-text-muted">Not analyzed yet -- press Analyze to start.</p>
-                  )}
-                  {video.status === "processing" && (
-                    <p className="mb-4 text-sm text-text-muted">Analyzing -- this usually takes a few seconds.</p>
-                  )}
-                  {video.status === "failed" && video.error && (
-                    <p className="mb-4 text-sm text-negative">{video.error}</p>
-                  )}
-                  <VideoWorkspace video={video} />
-                </div>
-              </>
-            )}
-          </div>
-
-          {video && chatOpen && (
-            <AiAnalysePanel key={video.id} videoId={video.id} filename={video.original_filename} onClose={() => setChatOpen(false)} />
+          {video && (
+            <div className="flex gap-2.5">
+              {/* Compare / Export report: designed in the draft, no backend yet. */}
+              <button type="button" disabled title="Coming soon" className="flex h-[38px] items-center gap-2 rounded-[10px] border border-border bg-surface px-3.5 text-[13px] font-medium text-text-soft opacity-50">
+                Compare
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAnalyze(video.id)}
+                disabled={busy}
+                className="flex h-[38px] items-center gap-2 rounded-[10px] border border-border bg-surface px-3.5 text-[13px] font-medium text-text-soft hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshIcon className={"h-[15px] w-[15px]" + (busy ? " animate-spin" : "")} />
+                {busy ? "Analysing..." : video.status === "completed" ? "Re-analyse" : "Analyse"}
+              </button>
+              <button type="button" disabled title="Coming soon" className="flex h-[38px] items-center gap-2 rounded-[10px] bg-[linear-gradient(135deg,#a27bff,#ff4d8d)] px-3.5 text-[13px] font-semibold text-white opacity-50">
+                Export report
+              </button>
+            </div>
           )}
         </div>
-      </div>
+
+        {error && <p className="mb-4 text-sm text-negative">{error}</p>}
+
+        {!video ? (
+          <div className="flex items-start gap-3 rounded-2xl border border-border bg-surface p-5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-stat-time">
+              <VideoIcon className="h-5 w-5 text-white" />
+            </div>
+            <div className="text-sm text-text-muted">
+              <p className="text-text">
+                {videos == null ? "Loading..." : videos.length === 0 ? "Upload a video to get started." : "Select a video on the left."}
+              </p>
+              <p className="mt-1 text-text">Film from the side, not the front or back.</p>
+              <p className="mt-1">
+                A clean side-on view is what form analysis needs to read things like trunk lean, knee drive, and
+                overstride. A few steady seconds at a consistent distance from the camera works best.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {video.status === "pending" && <p className="mb-4 text-sm text-text-muted">Not analysed yet -- press Analyse to start.</p>}
+            {video.status === "processing" && <p className="mb-4 text-sm text-text-muted">Analysing -- this usually takes a few seconds.</p>}
+            {video.status === "failed" && video.error && <p className="mb-4 text-sm text-negative">{video.error}</p>}
+            <VideoWorkspace video={video} />
+          </>
+        )}
+      </main>
     </div>
   );
 }
