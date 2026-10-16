@@ -20,10 +20,15 @@ function parseISODate(s: string): Date | null {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
-function formatDisplay(s: string): string {
+function formatDisplay(s: string, weekday = false): string {
   const d = parseISODate(s);
   if (!d) return "";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    ...(weekday ? { weekday: "short" as const } : {}),
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 export default function DatePicker({
@@ -31,12 +36,16 @@ export default function DatePicker({
   value,
   onChange,
   placeholder = "Select date",
+  variant = "default",
 }: {
   id?: string;
   value: string; // "YYYY-MM-DD" or ""
   onChange: (value: string) => void;
   placeholder?: string;
+  /** "drawer": taller field, icon on the left, weekday in the text (race drawer). */
+  variant?: "default" | "drawer";
 }) {
+  const drawer = variant === "drawer";
   const [open, setOpen] = useState(false);
   const selected = parseISODate(value);
   const [viewDate, setViewDate] = useState(() => selected ?? new Date());
@@ -88,12 +97,17 @@ export default function DatePicker({
         type="button"
         id={id}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between rounded-xl border border-border bg-bg px-3 py-2 text-left text-sm text-text outline-none focus:border-brand"
+        className={
+          drawer
+            ? "flex h-11 w-full items-center gap-2.5 rounded-[11px] border border-border-strong bg-bg px-3.5 text-left text-sm text-text outline-none focus:border-violet focus:shadow-[0_0_0_3px_rgba(162,123,255,0.2)]"
+            : "flex w-full items-center justify-between rounded-xl border border-border bg-bg px-3 py-2 text-left text-sm text-text outline-none focus:border-brand"
+        }
       >
+        {drawer && <CalendarIcon className="h-4 w-4 shrink-0 text-text-muted" />}
         <span className={value ? "text-text" : "text-text-muted"}>
-          {value ? formatDisplay(value) : placeholder}
+          {value ? formatDisplay(value, drawer) : placeholder}
         </span>
-        <CalendarIcon className="h-4 w-4 shrink-0 text-text-muted" />
+        {!drawer && <CalendarIcon className="h-4 w-4 shrink-0 text-text-muted" />}
       </button>
 
       {open && (

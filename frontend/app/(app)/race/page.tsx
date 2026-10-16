@@ -1,75 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 
-import Card, { EmptyPlaceholder } from "@/components/Card";
-import DatePicker from "@/components/DatePicker";
-import Header from "@/components/Header";
-import { ChevronDownIcon, FlagIcon, PlusIcon, TrophyIcon } from "@/components/icons";
+import { EmptyPlaceholder } from "@/components/Card";
+import { CalendarIcon, ClockIcon, DotsIcon, PinIcon, PlusIcon } from "@/components/icons";
+import RaceDrawer from "@/components/race/RaceDrawer";
+import RaceTimeline, { type TimelinePoint } from "@/components/race/RaceTimeline";
+import { EMPTY_FORM, PR_TYPES, raceToForm, type PersonalRecord, type Race, type RaceFormValues } from "@/components/race/types";
 import { formatDuration, formatPace, parseDurationInput } from "@/lib/format";
-
-interface Race {
-  id: string;
-  name: string;
-  distance_km: number;
-  race_date: string; // "YYYY-MM-DD"
-  race_time: string | null; // "HH:MM:SS", local flag-off time
-  location: string | null;
-  notes: string | null;
-  goal_time_s: number | null;
-  priority: "A" | "B" | "C" | null;
-  status: "upcoming" | "completed";
-  actual_time_s: number | null;
-  created_at: string;
-}
-
-interface RaceFormValues {
-  name: string;
-  distance_km: string;
-  race_date: string;
-  race_time: string; // "HH:MM", optional flag-off time
-  location: string;
-  notes: string;
-  goal_time: string;
-  priority: "" | "A" | "B" | "C";
-  status: "upcoming" | "completed";
-  actual_time: string;
-}
-
-const EMPTY_FORM: RaceFormValues = {
-  name: "",
-  distance_km: "",
-  race_date: "",
-  race_time: "",
-  location: "",
-  notes: "",
-  goal_time: "",
-  priority: "",
-  status: "upcoming",
-  actual_time: "",
-};
-
-const PRIORITY_LABEL: Record<string, string> = { A: "A-race (goal)", B: "B-race", C: "C-race" };
-const PRIORITY_COLOR: Record<string, string> = {
-  A: "bg-brand text-white",
-  B: "bg-stat-time text-white",
-  C: "bg-surface-hover text-text-muted",
-};
-
-function raceToForm(race: Race): RaceFormValues {
-  return {
-    name: race.name,
-    distance_km: String(race.distance_km),
-    race_date: race.race_date,
-    race_time: race.race_time ? race.race_time.slice(0, 5) : "",
-    location: race.location ?? "",
-    notes: race.notes ?? "",
-    goal_time: race.goal_time_s != null ? formatDuration(race.goal_time_s) : "",
-    priority: race.priority ?? "",
-    status: race.status,
-    actual_time: race.actual_time_s != null ? formatDuration(race.actual_time_s) : "",
-  };
-}
 
 function daysUntil(dateStr: string): number {
   const today = new Date();
@@ -96,368 +34,432 @@ function formatRaceTime(timeStr: string): string {
   });
 }
 
-/** Common race distances get a nicer label than "21.1 km". */
-function distanceLabel(km: number): string {
+// ---------------------------------------------------------------------------
+// Display (design: runIQ_draft/race_design.html)
+
+const PRIORITY_CHIP: Record<string, string> = {
+  A: "bg-brand text-white",
+  B: "bg-violet/25 text-[#c9b6ff]",
+  C: "bg-blue/20 text-blue",
+};
+const PRIORITY_INFO: Record<string, { name: string; hint: string }> = {
+  A: { name: "Goal race", hint: "Full taper, peak effort" },
+  B: { name: "Tune-up", hint: "Short taper, hard effort" },
+  C: { name: "Training", hint: "Run through it" },
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseDate(dateStr: string): Date {
+  return new Date(dateStr + "T00:00:00");
+}
+
+function distanceName(km: number): string {
   const known: [number, string][] = [
     [5, "5K"],
     [10, "10K"],
-    [21.0975, "Half Marathon"],
+    [21.0975, "Half marathon"],
     [42.195, "Marathon"],
   ];
   const match = known.find(([d]) => Math.abs(d - km) < 0.05);
-  return match ? `${match[1]} · ${km.toFixed(1)} km` : `${km.toFixed(1)} km`;
+  return match ? match[1] : "";
 }
 
-const DISTANCE_OPTIONS: { value: string; label: string }[] = [
-  { value: "42.195", label: "Full Marathon (42.2km)" },
-  { value: "21.0975", label: "Half Marathon (21.1km)" },
-  { value: "10", label: "10km" },
-  { value: "5", label: "5km" },
-];
-
-/** Which preset (if any) a stored distance_km matches -- "" when the
- * field is empty (new race, nothing picked yet), "custom" when it's a
- * real number that isn't one of the presets. */
-function matchDistancePreset(distanceKmStr: string): string {
-  if (!distanceKmStr) return "";
-  const num = Number(distanceKmStr);
-  if (Number.isNaN(num)) return "custom";
-  const match = DISTANCE_OPTIONS.find((o) => Math.abs(Number(o.value) - num) < 0.05);
-  return match ? match.value : "custom";
+/** "Half marathon · 21.1 km · Flag-off 3:00 AM · Penang" */
+function raceMeta(race: Race): string {
+  const name = distanceName(race.distance_km);
+  return [
+    name ? `${name} · ${race.distance_km.toFixed(1)} km` : `${race.distance_km.toFixed(1)} km`,
+    race.race_time ? `Flag-off ${formatRaceTime(race.race_time)}` : null,
+    race.location,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
-const inputClass =
-  "w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-brand";
-const labelClass = "mb-1 block text-sm text-text-muted";
+function gapLabel(fromDate: string, toDate: string): string {
+  const days = Math.round((parseDate(toDate).getTime() - parseDate(fromDate).getTime()) / DAY_MS);
+  return days < 14 ? `${days} days` : `${Math.round(days / 7)} weeks`;
+}
 
-function RaceForm({
-  initial,
-  onCancel,
-  onSubmit,
-  submitting,
-}: {
-  initial: RaceFormValues;
-  onCancel: () => void;
-  onSubmit: (values: RaceFormValues) => void;
-  submitting: boolean;
-}) {
-  const [values, setValues] = useState(initial);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [distanceMode, setDistanceMode] = useState(() => matchDistancePreset(initial.distance_km));
+function shortDate(dateStr: string): string {
+  return parseDate(dateStr).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
 
-  function field<K extends keyof RaceFormValues>(key: K, value: RaceFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
-
-  function handleDistanceModeChange(mode: string) {
-    setDistanceMode(mode);
-    if (mode === "custom") {
-      field("distance_km", "");
-    } else if (mode !== "") {
-      field("distance_km", mode);
-    }
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setFormError(null);
-
-    if (!values.name.trim()) return setFormError("Race name is required.");
-    if (!values.distance_km || Number(values.distance_km) <= 0) return setFormError("Distance must be greater than 0.");
-    if (!values.race_date) return setFormError("Race date is required.");
-    if (values.goal_time && parseDurationInput(values.goal_time) == null) {
-      return setFormError('Goal time must look like "1:45:00" or "45:00".');
-    }
-    if (values.status === "completed" && values.actual_time && parseDurationInput(values.actual_time) == null) {
-      return setFormError('Actual time must look like "1:45:00" or "45:00".');
-    }
-
-    onSubmit(values);
-  }
-
+function PriorityChip({ priority }: { priority: "A" | "B" | "C" }) {
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <label className={labelClass} htmlFor="name">
-            Race name
-          </label>
-          <input
-            id="name"
-            className={inputClass}
-            placeholder="e.g. KL Standard Chartered Marathon"
-            value={values.name}
-            onChange={(e) => field("name", e.target.value)}
-          />
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="distance_km">
-            Distance (km)
-          </label>
-          <select
-            id="distance_km"
-            className={inputClass}
-            value={distanceMode}
-            onChange={(e) => handleDistanceModeChange(e.target.value)}
-          >
-            <option value="" disabled>
-              Select distance
-            </option>
-            {DISTANCE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-            <option value="custom">Custom</option>
-          </select>
-          {distanceMode === "custom" && (
-            <input
-              type="number"
-              step="any"
-              min="0"
-              className={inputClass + " mt-2"}
-              placeholder="e.g. 15.3"
-              value={values.distance_km}
-              onChange={(e) => field("distance_km", e.target.value)}
-            />
-          )}
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="race_date">
-            Date
-          </label>
-          <DatePicker id="race_date" value={values.race_date} onChange={(v) => field("race_date", v)} />
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="race_time">
-            Race time <span className="text-text-muted">(flag-off, optional)</span>
-          </label>
-          <input
-            id="race_time"
-            type="time"
-            className={inputClass}
-            value={values.race_time}
-            onChange={(e) => field("race_time", e.target.value)}
-          />
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="location">
-            Location
-          </label>
-          <input
-            id="location"
-            className={inputClass}
-            placeholder="e.g. Kuala Lumpur"
-            value={values.location}
-            onChange={(e) => field("location", e.target.value)}
-          />
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="priority">
-            Priority
-          </label>
-          <select
-            id="priority"
-            className={inputClass}
-            value={values.priority}
-            onChange={(e) => field("priority", e.target.value as RaceFormValues["priority"])}
-          >
-            <option value="">None</option>
-            <option value="A">A-race (goal)</option>
-            <option value="B">B-race</option>
-            <option value="C">C-race</option>
-          </select>
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="goal_time">
-            Goal time
-          </label>
-          <input
-            id="goal_time"
-            className={inputClass}
-            placeholder="e.g. 1:45:00"
-            value={values.goal_time}
-            onChange={(e) => field("goal_time", e.target.value)}
-          />
-        </div>
-        <div>
-          <label className={labelClass} htmlFor="status">
-            Status
-          </label>
-          <select
-            id="status"
-            className={inputClass}
-            value={values.status}
-            onChange={(e) => field("status", e.target.value as RaceFormValues["status"])}
-          >
-            <option value="upcoming">Upcoming</option>
-            <option value="completed">Completed</option>
-          </select>
-        </div>
-        {values.status === "completed" && (
-          <div>
-            <label className={labelClass} htmlFor="actual_time">
-              Actual time
-            </label>
-            <input
-              id="actual_time"
-              className={inputClass}
-              placeholder="e.g. 1:48:30"
-              value={values.actual_time}
-              onChange={(e) => field("actual_time", e.target.value)}
-            />
-          </div>
-        )}
-        <div className="sm:col-span-2">
-          <label className={labelClass} htmlFor="notes">
-            Notes
-          </label>
-          <textarea
-            id="notes"
-            rows={2}
-            className={inputClass}
-            placeholder="Optional -- course notes, registration link, etc."
-            value={values.notes}
-            onChange={(e) => field("notes", e.target.value)}
-          />
-        </div>
-      </div>
-
-      {formError && <p className="text-sm text-negative">{formError}</p>}
-
-      <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-xl bg-brand px-5 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {submitting ? "Saving..." : "Save race"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-xl border border-border bg-surface px-5 py-2.5 text-sm text-text-muted hover:text-text"
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
+    <span
+      className={
+        "grid h-[22px] w-[22px] shrink-0 place-items-center rounded-[7px] text-[10.5px] font-extrabold " +
+        PRIORITY_CHIP[priority]
+      }
+    >
+      {priority}
+    </span>
   );
 }
 
-function RaceCard({
-  race,
-  isEditing,
-  onEdit,
-  onCancelEdit,
-  onSave,
-  onDelete,
-  saving,
-}: {
-  race: Race;
-  isEditing: boolean;
-  onEdit: () => void;
-  onCancelEdit: () => void;
-  onSave: (values: RaceFormValues) => void;
-  onDelete: () => void;
-  saving: boolean;
-}) {
-  const isUpcoming = race.status === "upcoming";
-  const days = isUpcoming ? daysUntil(race.race_date) : null;
-  const delta =
-    race.status === "completed" && race.actual_time_s != null && race.goal_time_s != null
-      ? race.actual_time_s - race.goal_time_s
-      : null;
+function DateTile({ dateStr, done = false }: { dateStr: string; done?: boolean }) {
+  const d = parseDate(dateStr);
+  return (
+    <div
+      className={
+        "flex h-[66px] w-[62px] shrink-0 flex-col items-center justify-center rounded-[14px] border " +
+        (done ? "border-positive/35 bg-positive/10" : "border-border bg-surface-hover")
+      }
+    >
+      <small className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-text-muted">
+        {d.toLocaleDateString(undefined, { month: "short" })}
+      </small>
+      <b className="text-2xl font-semibold leading-[1.1]">{d.getDate()}</b>
+      <span className="text-[10px] text-text-muted">{d.toLocaleDateString(undefined, { weekday: "short" })}</span>
+    </div>
+  );
+}
 
-  if (isEditing) {
-    return (
-      <Card>
-        <RaceForm initial={raceToForm(race)} onCancel={onCancelEdit} onSubmit={onSave} submitting={saving} />
-      </Card>
-    );
-  }
+function SectionTitle({ title, note }: { title: string; note?: string }) {
+  return (
+    <div className="mb-3.5 mt-7 flex items-center gap-3 text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+      {title}
+      <span className="h-px flex-1 bg-border" />
+      {note && <em className="font-medium normal-case not-italic tracking-normal text-text-muted">{note}</em>}
+    </div>
+  );
+}
+
+function SetButton({ children, onClick }: { children: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-amber/55 px-2.5 py-[5px] text-[13px] font-semibold text-[#ffd68a] hover:bg-amber/10"
+    >
+      ＋ {children}
+    </button>
+  );
+}
+
+function MoreMenu({ onEdit, onDelete, dark = false }: { onEdit?: () => void; onDelete: () => void; dark?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
 
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div
-            className={
-              "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl " +
-              (isUpcoming ? "bg-stat-runs" : "bg-stat-distance")
-            }
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-label="More actions"
+        onClick={() => setOpen((o) => !o)}
+        className={
+          "grid place-items-center text-text-muted hover:text-text " +
+          (dark
+            ? "h-9 w-9 rounded-[10px] border border-white/15 bg-bg/30"
+            : "h-[34px] w-[34px] rounded-[9px] border border-border")
+        }
+      >
+        <DotsIcon className="h-4 w-4" />
+      </button>
+      {open && (
+        <div className="absolute right-0 z-10 mt-1.5 w-32 overflow-hidden rounded-xl border border-border-strong bg-surface shadow-[0_12px_30px_rgba(0,0,0,0.4)]">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onEdit();
+              }}
+              className="block w-full px-3 py-2 text-left text-[13px] text-text-soft hover:bg-surface-hover"
+            >
+              Edit
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+            className="block w-full px-3 py-2 text-left text-[13px] text-negative hover:bg-surface-hover"
           >
-            {isUpcoming ? <FlagIcon className="h-5 w-5 text-white" /> : <TrophyIcon className="h-5 w-5 text-white" />}
-          </div>
-          <div>
-            <div className="flex items-center gap-2 text-sm font-medium text-text">
-              {race.name}
-              {race.priority && (
-                <span className={"rounded-full px-2 py-0.5 text-[10px] font-semibold " + PRIORITY_COLOR[race.priority]}>
-                  {race.priority}
-                </span>
-              )}
-            </div>
-            <div className="text-xs text-text-muted">
-              {distanceLabel(race.distance_km)} · {formatRaceDate(race.race_date)}
-              {race.race_time ? ` · ${formatRaceTime(race.race_time)}` : ""}
-              {race.location ? ` · ${race.location}` : ""}
-            </div>
-          </div>
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface CardCommon {
+  race: Race;
+  prev: Race | null; // the race before this one (any status), for "N weeks after X"
+  prLabel: string | null; // e.g. "half"
+  prTimeS: number | null;
+  onEdit: () => void;
+  onMarkCompleted: () => void;
+  onDelete: () => void;
+}
+
+function NextRaceHero({ race, prev, prLabel, prTimeS, onEdit, onMarkCompleted, onDelete }: CardCommon) {
+  const days = daysUntil(race.race_date);
+  const name = distanceName(race.distance_km);
+
+  return (
+    <section className="mt-[18px] grid grid-cols-[1fr_auto] gap-7 rounded-2xl border border-brand/35 bg-[radial-gradient(600px_300px_at_100%_0%,rgba(255,77,141,0.18),transparent_65%),radial-gradient(500px_260px_at_0%_100%,rgba(122,92,255,0.16),transparent_65%),#17143a] px-7 py-[26px] shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-brand/35 bg-brand/15 px-2.5 py-[5px] text-[11px] font-bold uppercase tracking-[0.06em] text-[#ff8fb8]">
+            ⚑ Next race
+          </span>
+          {name && (
+            <span className="inline-flex items-center rounded-full bg-white/10 px-2.5 py-[5px] text-[11px] font-bold uppercase tracking-[0.06em] text-text-soft">
+              {name}
+            </span>
+          )}
+        </div>
+        <div className="mb-1.5 mt-3 text-[30px] font-semibold tracking-[-0.02em]">{race.name}</div>
+        <div className="flex flex-wrap gap-x-[18px] gap-y-1 text-[13.5px] text-text-soft">
+          <span className="flex items-center gap-1.5">
+            <CalendarIcon className="h-[15px] w-[15px] text-text-muted" />
+            {formatRaceDate(race.race_date)}
+          </span>
+          {race.race_time && (
+            <span className="flex items-center gap-1.5">
+              <ClockIcon className="h-[15px] w-[15px] text-text-muted" />
+              Flag-off {formatRaceTime(race.race_time)}
+            </span>
+          )}
+          {race.location && (
+            <span className="flex items-center gap-1.5">
+              <PinIcon className="h-[15px] w-[15px] text-text-muted" />
+              {race.location}
+            </span>
+          )}
         </div>
 
-        {isUpcoming && days != null && (
-          <div className="shrink-0 rounded-full border border-border px-3 py-1 text-xs text-text-muted">
-            {days === 0 ? "Today" : days > 0 ? `in ${days}d` : `${Math.abs(days)}d ago`}
-          </div>
-        )}
+        <div className="mt-[22px] flex flex-wrap border-t border-white/10 pt-[18px] [&>div]:mr-[34px] [&>div]:border-r [&>div]:border-white/10 [&>div]:pr-[34px] [&>div:last-child]:mr-0 [&>div:last-child]:border-r-0 [&>div:last-child]:pr-0">
+          <Fact label="Distance">
+            <b className="mt-1.5 block text-xl font-semibold">{race.distance_km.toFixed(1)} km</b>
+          </Fact>
+          <Fact label="Goal time">
+            {race.goal_time_s != null ? (
+              <>
+                <b className="mt-1.5 block text-xl font-semibold">{formatDuration(race.goal_time_s)}</b>
+                <div className="mt-[5px] text-xs text-text-muted">
+                  {formatPace(race.goal_time_s / race.distance_km)}
+                  {prTimeS != null && ` · PR is ${formatDuration(prTimeS)}`}
+                </div>
+              </>
+            ) : (
+              <>
+                <SetButton onClick={onEdit}>Set goal</SetButton>
+                {prTimeS != null && (
+                  <div className="mt-[5px] text-xs text-text-muted">
+                    Your {prLabel} PR: {formatDuration(prTimeS)}
+                  </div>
+                )}
+              </>
+            )}
+          </Fact>
+          <Fact label="Priority">
+            {race.priority ? (
+              <>
+                <b className="mt-1.5 flex items-center gap-2 text-xl font-semibold">
+                  <PriorityChip priority={race.priority} />
+                  {PRIORITY_INFO[race.priority].name}
+                </b>
+                <div className="mt-[5px] text-xs text-text-muted">{PRIORITY_INFO[race.priority].hint}</div>
+              </>
+            ) : (
+              <SetButton onClick={onEdit}>Set A / B / C</SetButton>
+            )}
+          </Fact>
+          {prev && (
+            <Fact label="Since last race">
+              <b className="mt-1.5 block text-xl font-semibold">{gapLabel(prev.race_date, race.race_date)}</b>
+              <div className="mt-[5px] text-xs text-text-muted">
+                after {prev.name}
+                {distanceName(prev.distance_km) ? ` (${distanceName(prev.distance_km).toLowerCase()})` : ""}
+              </div>
+            </Fact>
+          )}
+        </div>
       </div>
 
-      {(race.goal_time_s != null || race.actual_time_s != null || race.notes) && (
-        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-border pt-4 text-sm">
-          {race.goal_time_s != null && (
-            <div>
-              <span className="text-text-muted">Goal: </span>
-              <span className="text-text">{formatDuration(race.goal_time_s)}</span>
-              <span className="text-text-muted"> ({formatPace(race.goal_time_s / race.distance_km)})</span>
-            </div>
+      <div className="flex flex-col items-end justify-between text-right">
+        <div>
+          <div className="text-[96px] font-semibold leading-[0.9] tracking-[-0.05em]">{Math.abs(days)}</div>
+          <div className="mt-1.5 text-[15px] text-text-soft">
+            {days === 0 ? "race day" : days > 0 ? (days === 1 ? "day to go" : "days to go") : "days ago"}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <HeroButton onClick={onEdit}>✎ Edit</HeroButton>
+          <HeroButton onClick={onMarkCompleted}>✓ Mark completed</HeroButton>
+          <MoreMenu dark onDelete={onDelete} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <small className="block text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">{label}</small>
+      {children}
+    </div>
+  );
+}
+
+function HeroButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-9 items-center gap-1.5 rounded-[10px] border border-white/15 bg-bg/30 px-3 text-[12.5px] text-text-soft hover:text-text"
+    >
+      {children}
+    </button>
+  );
+}
+
+function UpcomingCard({ race, prev, prTimeS, onEdit, onDelete }: CardCommon) {
+  const days = daysUntil(race.race_date);
+  return (
+    <section className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-[22px] rounded-2xl border border-border bg-surface px-[22px] py-5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+      <DateTile dateStr={race.race_date} />
+      <div className="min-w-0">
+        <div className="flex items-center gap-2.5 text-[17px] font-semibold">
+          <span className="truncate">{race.name}</span>
+          {race.priority && <PriorityChip priority={race.priority} />}
+        </div>
+        <div className="mt-[5px] text-[13px] text-text-muted">{raceMeta(race)}</div>
+        <div className="mt-3 flex items-center gap-4 text-xs text-text-muted">
+          {prev && (
+            <>
+              <span>
+                {gapLabel(prev.race_date, race.race_date)} after {prev.name.split(" ")[0]}
+              </span>
+              <span>·</span>
+            </>
           )}
-          {race.actual_time_s != null && (
-            <div>
-              <span className="text-text-muted">Result: </span>
-              <span className="text-text">{formatDuration(race.actual_time_s)}</span>
-              {delta != null && (
-                <span className={delta <= 0 ? "text-positive" : "text-negative"}>
-                  {" "}
-                  ({delta <= 0 ? "-" : "+"}
-                  {formatDuration(Math.abs(delta))})
-                </span>
-              )}
-            </div>
-          )}
-          {race.notes && <div className="text-text-muted">{race.notes}</div>}
+          {race.priority ? <span>{PRIORITY_INFO[race.priority].name}</span> : <span>Priority not set</span>}
+        </div>
+      </div>
+
+      {race.goal_time_s != null ? (
+        <div className="border-r border-border pr-[22px] text-right">
+          <small className="block text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">Goal</small>
+          <b className="mt-1 block text-[22px] font-semibold">{formatDuration(race.goal_time_s)}</b>
+          <span className="text-xs text-text-muted">
+            {formatPace(race.goal_time_s / race.distance_km)}
+            {prTimeS != null && ` · PR is ${formatDuration(prTimeS)}`}
+          </span>
+        </div>
+      ) : (
+        <div className="border-r border-border pr-[22px] text-right">
+          <small className="block text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">Goal</small>
+          <SetButton onClick={onEdit}>Set goal</SetButton>
         </div>
       )}
 
-      <div className="mt-4 flex items-center gap-3 border-t border-border pt-3">
-        <button type="button" onClick={onEdit} className="text-xs font-medium text-text-muted hover:text-text">
-          {isUpcoming ? "Edit / Mark completed" : "Edit"}
-        </button>
-        <button type="button" onClick={onDelete} className="text-xs font-medium text-negative hover:opacity-80">
-          Delete
-        </button>
+      <div className="flex items-center gap-4">
+        <div className="w-[110px] text-right">
+          <b className="block text-[26px] font-semibold">{Math.abs(days)}</b>
+          <span className="text-xs text-text-muted">
+            {days === 0 ? "race day" : days > 0 ? (days === 1 ? "day to go" : "days to go") : "days ago"}
+          </span>
+        </div>
+        <MoreMenu onEdit={onEdit} onDelete={onDelete} />
       </div>
+    </section>
+  );
+}
+
+function CompletedCard({ race, onEdit, onDelete }: CardCommon) {
+  const delta =
+    race.actual_time_s != null && race.goal_time_s != null ? race.actual_time_s - race.goal_time_s : null;
+  const pct = delta != null && race.goal_time_s ? Math.round((Math.abs(delta) / race.goal_time_s) * 100) : null;
+
+  return (
+    <section className="grid grid-cols-[auto_1fr_auto] items-center gap-[22px] rounded-2xl border border-border bg-surface px-[22px] py-5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+      <DateTile dateStr={race.race_date} done />
+      <div className="min-w-0">
+        <div className="flex items-center gap-2.5 text-[17px] font-semibold">
+          <span className="truncate">{race.name}</span>
+          {race.priority && <PriorityChip priority={race.priority} />}
+        </div>
+        <div className="mt-[5px] text-[13px] text-text-muted">{raceMeta(race)}</div>
+        {race.notes && <div className="mt-3 text-xs text-text-muted">{race.notes}</div>}
+      </div>
+      <div className="flex items-center gap-4">
+        {race.goal_time_s != null || race.actual_time_s != null ? (
+          <div className="grid grid-cols-[repeat(3,auto)] items-center [&>div]:border-l [&>div]:border-border [&>div]:px-[22px] [&>div]:text-right [&>div:first-child]:border-l-0">
+            <Result label="Goal" value={race.goal_time_s} km={race.distance_km} muted />
+            <Result label="Result" value={race.actual_time_s} km={race.distance_km} />
+            <div>
+              <small className="block text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">
+                vs goal
+              </small>
+              {delta != null ? (
+                <>
+                  <b className={"mt-1 block text-[22px] font-semibold " + (delta <= 0 ? "text-positive" : "text-amber")}>
+                    {delta <= 0 ? "-" : "+"}
+                    {formatDuration(Math.abs(delta))}
+                  </b>
+                  <span className="text-xs text-text-muted">
+                    {pct}% {delta <= 0 ? "faster" : "slower"}
+                  </span>
+                </>
+              ) : (
+                <b className="mt-1 block text-[22px] font-semibold text-text-muted">—</b>
+              )}
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-text-muted">No result logged</span>
+        )}
+        <MoreMenu onEdit={onEdit} onDelete={onDelete} />
+      </div>
+    </section>
+  );
+}
+
+function Result({ label, value, km, muted = false }: { label: string; value: number | null; km: number; muted?: boolean }) {
+  return (
+    <div>
+      <small className="block text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">{label}</small>
+      {value != null ? (
+        <>
+          <b className={"mt-1 block text-[22px] font-semibold " + (muted ? "text-text-soft" : "")}>
+            {formatDuration(value)}
+          </b>
+          <span className="text-xs text-text-muted">{formatPace(value / km)}</span>
+        </>
+      ) : (
+        <b className="mt-1 block text-[22px] font-semibold text-text-muted">—</b>
+      )}
     </div>
   );
 }
 
 export default function RacePage() {
   const [races, setRaces] = useState<Race[] | null>(null);
+  const [prs, setPrs] = useState<PersonalRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editAsCompleted, setEditAsCompleted] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showCompleted, setShowCompleted] = useState(true);
+  const [drawerError, setDrawerError] = useState<string | null>(null);
 
   function load() {
     fetch("/api/races")
@@ -470,6 +472,32 @@ export default function RacePage() {
   }
 
   useEffect(load, []);
+
+  // PRs only feed the "PR is ..." hints, so a failure just hides them.
+  useEffect(() => {
+    fetch("/api/personal-records")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: PersonalRecord[]) => setPrs(data))
+      .catch(() => setPrs([]));
+  }, []);
+
+  function prFor(km: number): { label: string | null; timeS: number | null } {
+    const type = PR_TYPES.find((t) => Math.abs(t.km - km) < 0.05);
+    const pr = type && prs.find((p) => p.type_id === type.type_id && p.metric === "time_s");
+    return pr && type ? { label: type.name, timeS: pr.value } : { label: null, timeS: null };
+  }
+
+  function startEdit(id: string, asCompleted = false) {
+    setEditingId(id);
+    setEditAsCompleted(asCompleted);
+    setAdding(false);
+    setDrawerError(null);
+  }
+
+  function closeDrawer() {
+    setAdding(false);
+    setEditingId(null);
+  }
 
   function payloadFromForm(values: RaceFormValues) {
     return {
@@ -496,7 +524,7 @@ export default function RacePage() {
       setAdding(false);
       load();
     } catch (err) {
-      setError((err as Error).message);
+      setDrawerError((err as Error).message);
     } finally {
       setSaving(false);
     }
@@ -518,7 +546,7 @@ export default function RacePage() {
       setEditingId(null);
       load();
     } catch (err) {
-      setError((err as Error).message);
+      setDrawerError((err as Error).message);
     } finally {
       setSaving(false);
     }
@@ -534,86 +562,149 @@ export default function RacePage() {
     }
   }
 
-  const upcoming = races?.filter((r) => r.status === "upcoming") ?? [];
-  const completed = races?.filter((r) => r.status === "completed") ?? [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const byDate = [...(races ?? [])].sort((a, b) => a.race_date.localeCompare(b.race_date));
+  const upcoming = byDate.filter((r) => r.status === "upcoming");
+  const completed = byDate.filter((r) => r.status === "completed").reverse();
+  const editingRace = races?.find((r) => r.id === editingId) ?? null;
+  const hero = upcoming.find((r) => daysUntil(r.race_date) >= 0) ?? upcoming[0] ?? null;
+  const restUpcoming = upcoming.filter((r) => r !== hero);
+
+  const prevOf = (race: Race): Race | null => {
+    const i = byDate.indexOf(race);
+    return i > 0 ? byDate[i - 1] : null;
+  };
+
+  function cardProps(race: Race): CardCommon {
+    const { label, timeS } = prFor(race.distance_km);
+    return {
+      race,
+      prev: prevOf(race),
+      prLabel: label,
+      prTimeS: timeS,
+      onEdit: () => startEdit(race.id),
+      onMarkCompleted: () => startEdit(race.id, true),
+      onDelete: () => handleDelete(race.id),
+    };
+  }
+
+  function renderRace(race: Race, view: (p: CardCommon) => ReactNode) {
+    return <Fragment key={race.id}>{view(cardProps(race))}</Fragment>;
+  }
+
+  // Season strip: the latest finished race (if recent), then what's ahead.
+  const lastDone = completed.find((r) => today.getTime() - parseDate(r.race_date).getTime() < 120 * DAY_MS);
+  const stripRaces = [...(lastDone ? [lastDone] : []), ...upcoming.slice(0, 5)].sort((a, b) =>
+    a.race_date.localeCompare(b.race_date),
+  );
+  const points: TimelinePoint[] = stripRaces.map((r) => {
+    const days = daysUntil(r.race_date);
+    const kind = r.status === "completed" ? "done" : r === hero ? "next" : "upcoming";
+    const sub =
+      r.status === "completed"
+        ? `${shortDate(r.race_date)}${r.actual_time_s != null ? ` · ${formatDuration(r.actual_time_s)}` : ""}`
+        : `${shortDate(r.race_date)} · ${days === 0 ? "today" : days > 0 ? `in ${days} days` : `${-days} days ago`}`;
+    const name = distanceName(r.distance_km).replace(" marathon", "").replace(/^Marathon$/, "Full");
+    const short = r.name.length > 20 ? r.name.slice(0, 19).trimEnd() + "…" : r.name;
+    return { date: parseDate(r.race_date), label: name ? `${short} · ${name}` : short, sub, kind };
+  });
+
+  const year = today.getFullYear();
+  const completedThisYear = completed.filter((r) => parseDate(r.race_date).getFullYear() === year).length;
+  const kmAhead = upcoming.reduce((sum, r) => sum + r.distance_km, 0);
 
   return (
-    <div>
-      <Header title="Race" subtitle="Manage your upcoming and completed race events.">
+    <div className="mx-auto max-w-[1400px]">
+      <div className="mb-[22px] flex items-end justify-between">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">Races</div>
+          <h1 className="mt-1 text-[28px] font-semibold tracking-[-0.02em]">Race calendar</h1>
+          <p className="mt-1 text-sm text-text-soft">Your upcoming races, goals and results in one place.</p>
+        </div>
         <button
           type="button"
           onClick={() => {
-            setAdding((v) => !v);
+            setAdding(true);
             setEditingId(null);
+            setDrawerError(null);
           }}
-          className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white"
+          className="flex h-10 items-center gap-2 rounded-[11px] bg-[linear-gradient(135deg,#a27bff,#ff4d8d)] px-4 text-[13.5px] font-semibold text-white"
         >
           <PlusIcon className="h-4 w-4" />
-          Add Race
+          Add race
         </button>
-      </Header>
+      </div>
 
       {error && <p className="mb-4 text-sm text-negative">{error}</p>}
       {!error && !races && <p className="text-sm text-text-muted">Loading...</p>}
 
-      {adding && (
-        <Card title="New race" className="mb-4">
-          <RaceForm initial={EMPTY_FORM} onCancel={() => setAdding(false)} onSubmit={handleCreate} submitting={saving} />
-        </Card>
-      )}
-
       {races && races.length === 0 && !adding && (
-        <EmptyPlaceholder label='No races yet -- press "Add Race" to plan your next one.' />
+        <EmptyPlaceholder label='No races yet -- press "Add race" to plan your next one.' />
       )}
 
-      {upcoming.length > 0 && (
-        <div className="mb-6 flex flex-col gap-3">
-          <h2 className="text-sm font-semibold text-text-muted">Upcoming</h2>
-          {upcoming.map((race) => (
-            <RaceCard
-              key={race.id}
-              race={race}
-              isEditing={editingId === race.id}
-              onEdit={() => {
-                setEditingId(race.id);
-                setAdding(false);
-              }}
-              onCancelEdit={() => setEditingId(null)}
-              onSave={(values) => handleUpdate(race.id, values)}
-              onDelete={() => handleDelete(race.id)}
-              saving={saving}
-            />
-          ))}
-        </div>
+      {races && races.length > 0 && (
+        <section className="rounded-2xl border border-border bg-surface px-6 pb-[18px] pt-5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+          <div className="mb-1.5 flex items-center justify-between">
+            <b className="text-[15px] font-semibold">Season {year}</b>
+            <div className="flex gap-[22px] text-[12.5px] text-text-muted">
+              <span>
+                <b className="text-[13px] text-text">{upcoming.length}</b> upcoming
+              </span>
+              <span>
+                <b className="text-[13px] text-text">{completedThisYear}</b> completed
+              </span>
+              <span>
+                <b className="text-[13px] text-text">{kmAhead.toFixed(1)} km</b> of racing ahead
+              </span>
+            </div>
+          </div>
+          <RaceTimeline points={points} today={today} />
+        </section>
+      )}
+
+      {hero && renderRace(hero, (p) => <NextRaceHero {...p} />)}
+
+      {restUpcoming.length > 0 && (
+        <>
+          <SectionTitle title="Upcoming" note={`${restUpcoming.length} more`} />
+          <div className="flex flex-col gap-3">{restUpcoming.map((r) => renderRace(r, (p) => <UpcomingCard {...p} />))}</div>
+        </>
       )}
 
       {completed.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={() => setShowCompleted((v) => !v)}
-            className="flex w-fit items-center gap-2 text-sm font-semibold text-text-muted hover:text-text"
-          >
-            <ChevronDownIcon className={"h-4 w-4 transition-transform " + (showCompleted ? "" : "-rotate-90")} />
-            Completed ({completed.length})
-          </button>
-          {showCompleted &&
-            completed.map((race) => (
-              <RaceCard
-                key={race.id}
-                race={race}
-                isEditing={editingId === race.id}
-                onEdit={() => {
-                  setEditingId(race.id);
-                  setAdding(false);
-                }}
-                onCancelEdit={() => setEditingId(null)}
-                onSave={(values) => handleUpdate(race.id, values)}
-                onDelete={() => handleDelete(race.id)}
-                saving={saving}
-              />
-            ))}
-        </div>
+        <>
+          <SectionTitle
+            title="Completed"
+            note={`${completed.length} race${completed.length === 1 ? "" : "s"}`}
+          />
+          <div className="flex flex-col gap-3">{completed.map((r) => renderRace(r, (p) => <CompletedCard {...p} />))}</div>
+        </>
+      )}
+
+      {adding && (
+        <RaceDrawer
+          mode="add"
+          initial={EMPTY_FORM}
+          prs={prs}
+          submitting={saving}
+          serverError={drawerError}
+          onCancel={closeDrawer}
+          onSubmit={handleCreate}
+        />
+      )}
+      {editingRace && (
+        <RaceDrawer
+          key={`edit-${editingRace.id}`}
+          mode="edit"
+          initial={editAsCompleted ? { ...raceToForm(editingRace), status: "completed" } : raceToForm(editingRace)}
+          prs={prs}
+          submitting={saving}
+          serverError={drawerError}
+          onCancel={closeDrawer}
+          onSubmit={(values) => handleUpdate(editingRace.id, values)}
+        />
       )}
     </div>
   );
