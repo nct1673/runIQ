@@ -32,6 +32,22 @@ class ActivityOut(BaseModel):
     hr_time_in_zone_4: float | None = None
     hr_time_in_zone_5: float | None = None
 
+    # For the /activities list titles + search, and the detail panel's
+    # "vs your 30-day average" running-dynamics comparison (which is
+    # computed client-side from these same list rows).
+    activity_name: str | None = None
+    location: str | None = None
+    training_effect_label: str | None = None
+    moving_duration_s: float | None = None
+    avg_stride_length: float | None = None
+    avg_vertical_oscillation: float | None = None
+    avg_vertical_ratio: float | None = None
+    avg_ground_contact_time: float | None = None
+
+    # Labels of the personal records this run holds (e.g. ["5 km", "10 km"],
+    # or ["Marathon", "Longest Run"]), matched on Garmin's activity id.
+    record_labels: list[str] = []
+
     model_config = {"from_attributes": True}
 
 

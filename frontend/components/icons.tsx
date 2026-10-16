@@ -343,3 +343,30 @@ export function CloseIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function SearchIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-4-4" />
+    </svg>
+  );
+}
+
+export function PinIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="10" r="3" />
+      <path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11Z" />
+    </svg>
+  );
+}
+
+export function TreadmillIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3" y="14" width="18" height="5" rx="2" />
+      <path d="m7 14 3-8h4" />
+    </svg>
+  );
+}

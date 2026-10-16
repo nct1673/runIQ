@@ -17,6 +17,7 @@ from app.core.config import get_settings
 from app.core.db import get_db
 from app.ingestion import garmin_api_loader, processor
 from app.models.activity import Activity
+from app.models.personal_record import PersonalRecord
 from app.models.weather import WeatherCondition
 from app.schemas.activity import ActivityDetailOut, ActivityOut, GarminSyncResult
 from app.services.user_service import get_or_create_default_user
@@ -44,6 +45,16 @@ def list_activities(db: Session = Depends(get_db)) -> list[ActivityOut]:
         .order_by(Activity.started_at.desc())
     ).all()
 
+    # Personal records are matched to runs on Garmin's activity id
+    # (personal_records.garmin_activity_id == activities.external_id).
+    labels_by_garmin_id: dict[str, list[str]] = {}
+    for garmin_id, label in db.execute(
+        select(PersonalRecord.garmin_activity_id, PersonalRecord.label).where(
+            PersonalRecord.user_id == user.id, PersonalRecord.garmin_activity_id.isnot(None)
+        )
+    ):
+        labels_by_garmin_id.setdefault(str(garmin_id), []).append(label)
+
     return [
         ActivityOut(
             id=activity.id,
@@ -63,6 +74,15 @@ def list_activities(db: Session = Depends(get_db)) -> list[ActivityOut]:
             hr_time_in_zone_3=activity.hr_time_in_zone_3,
             hr_time_in_zone_4=activity.hr_time_in_zone_4,
             hr_time_in_zone_5=activity.hr_time_in_zone_5,
+            activity_name=activity.activity_name,
+            location=activity.location,
+            training_effect_label=activity.training_effect_label,
+            moving_duration_s=activity.moving_duration_s,
+            avg_stride_length=activity.avg_stride_length,
+            avg_vertical_oscillation=activity.avg_vertical_oscillation,
+            avg_vertical_ratio=activity.avg_vertical_ratio,
+            avg_ground_contact_time=activity.avg_ground_contact_time,
+            record_labels=labels_by_garmin_id.get(activity.external_id or "", []),
         )
         for activity, weather in rows
     ]
