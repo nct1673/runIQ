@@ -2,11 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import AnalyticsTabs, { useTabFromHash } from "@/components/analytics/AnalyticsTabs";
 import FitnessHero from "@/components/analytics/FitnessHero";
+import MileageCard from "@/components/analytics/MileageCard";
+import { SummaryCards } from "@/components/analytics/OverviewSummary";
 import PersonalRecordsGrid, { RunRow } from "@/components/analytics/PersonalRecordsGrid";
 import { PersonalRecord } from "@/components/analytics/records";
 import ScatterTrendCard from "@/components/analytics/ScatterTrendCard";
 import { PersonalBaselineCard, TypeSplitEntry, WhereYouRunCard } from "@/components/analytics/TrainingMix";
+import { useWeatherImpact } from "@/components/analytics/weather/useWeatherImpact";
 import WeatherSection from "@/components/analytics/weather/WeatherSection";
 import { analyzeSeries, SeriesPoint } from "@/components/analytics/trendStats";
 import { BiomechanicsTrendPoint } from "@/components/charts/MetricTrendChart";
@@ -42,8 +46,19 @@ function SectionLabel({ children, right }: { children: React.ReactNode; right?: 
 const mmss = (s: number) => formatPace(s).replace("/km", "");
 const signed = (n: number, digits: number) => `${n >= 0 ? "↑" : "↓"} ${Math.abs(n).toFixed(digits)}`;
 
-/** Analytics: fitness (VDOT), personal records, pace & running-form trends, training mix. */
+function PanelTitle({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="mb-[18px]">
+      <h2 className="text-xl font-semibold tracking-[-0.01em]">{title}</h2>
+      <p className="mt-1 text-[13px] text-text-muted">{subtitle}</p>
+    </div>
+  );
+}
+
+/** Analytics, in four tabs: Overview (fitness, summaries, training mix), Records,
+ * Form (pace & running dynamics) and Conditions (weather). */
 export default function AnalyticsPage() {
+  const [tab, setTab] = useTabFromHash();
   const [months, setMonths] = useState(12);
   const [includeTreadmill, setIncludeTreadmill] = useState(true);
 
@@ -60,6 +75,8 @@ export default function AnalyticsPage() {
     getJson("/api/analytics/type-split", setTypeSplit);
     getJson("/api/analytics/pace-trend?months=1", setEasyRecent);
   }, []);
+
+  const weather = useWeatherImpact(months);
 
   useEffect(() => {
     getJson(`/api/analytics/pace-trend?months=${months}`, setPaceTrend);
@@ -119,6 +136,9 @@ export default function AnalyticsPage() {
   const common = { rangeStart, rangeEnd };
   const now = Date.now();
 
+  const formSummary = statList.length ? { improving: improvingCount, total: statList.length, worsening } : null;
+  const conditionsTab = tab === "conditions"; // weather is outdoor-only, so the treadmill switch doesn't apply
+
   return (
     <div>
       <Header
@@ -126,6 +146,30 @@ export default function AnalyticsPage() {
         title="What's happening with my running?"
         subtitle="Performance, records and form, all from your synced runs."
       >
+        <button
+          type="button"
+          role="switch"
+          aria-checked={includeTreadmill && !conditionsTab}
+          disabled={conditionsTab}
+          onClick={() => setIncludeTreadmill((v) => !v)}
+          className={
+            "flex h-10 items-center gap-2 rounded-[10px] border border-border bg-surface px-3 text-[13px] text-text-soft " +
+            (conditionsTab ? "cursor-default opacity-45" : "")
+          }
+        >
+          <span
+            className={
+              "relative h-[18px] w-[30px] rounded-full " + (includeTreadmill && !conditionsTab ? "bg-positive" : "bg-border-strong")
+            }
+          >
+            <span
+              className={
+                "absolute top-0.5 h-3.5 w-3.5 rounded-full bg-[#14102a] " + (includeTreadmill && !conditionsTab ? "right-0.5" : "left-0.5")
+              }
+            />
+          </span>
+          {conditionsTab ? "Treadmill excluded here" : "Include treadmill"}
+        </button>
         <div role="group" aria-label="Range" className="flex rounded-[10px] border border-border bg-surface p-[3px]">
           {RANGES.map((r) => (
             <button
@@ -146,47 +190,57 @@ export default function AnalyticsPage() {
         </div>
       </Header>
 
-      <FitnessHero records={records} runs={runs} />
+      <AnalyticsTabs
+        active={tab}
+        onSelect={setTab}
+        badges={{
+          records: records ? { text: String(records.length) } : null,
+          form: formSummary ? { text: `${formSummary.improving}/${formSummary.total} ↑`, tone: "good" } : null,
+        }}
+      />
 
-      <SectionLabel>Personal records</SectionLabel>
-      <PersonalRecordsGrid records={records} runs={runs} />
+      {tab === "overview" && (
+        <>
+          <FitnessHero records={records} runs={runs} />
+          <SummaryCards records={records} form={formSummary} weather={weather.data} onNavigate={setTab} />
+          <SectionLabel>Training mix</SectionLabel>
+          <section className="grid grid-cols-1 gap-[18px] lg:grid-cols-[minmax(0,4fr)_minmax(0,6fr)]">
+            <WhereYouRunCard data={typeSplit} />
+            <MileageCard />
+          </section>
+        </>
+      )}
 
-      <SectionLabel
-        right={
-          <>
-            <div className="hidden gap-4 text-xs text-text-muted xl:flex">
-              <span className="flex items-center gap-1.5">
-                <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#8c86c8" /></svg>Outdoor run
-              </span>
-              <span className="flex items-center gap-1.5">
-                <svg width="10" height="10"><circle cx="5" cy="5" r="3.5" fill="none" stroke="#38d6ff" strokeWidth="1.5" /></svg>Treadmill
-              </span>
-              <span className="flex items-center gap-1.5">
-                <i className="inline-block h-[3px] w-3.5 rounded-sm bg-positive" />Trend · improving
-              </span>
-              <span className="flex items-center gap-1.5">
-                <i className="inline-block h-[3px] w-3.5 rounded-sm bg-amber" />Trend · worsening
-              </span>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={includeTreadmill}
-              onClick={() => setIncludeTreadmill((v) => !v)}
-              className="flex h-[34px] items-center gap-2 rounded-[10px] border border-border bg-surface px-3 text-xs text-text-soft"
-            >
-              <span className={"relative h-[18px] w-[30px] rounded-full " + (includeTreadmill ? "bg-positive" : "bg-border-strong")}>
-                <span
-                  className={"absolute top-0.5 h-3.5 w-3.5 rounded-full bg-[#14102a] " + (includeTreadmill ? "right-0.5" : "left-0.5")}
-                />
-              </span>
-              Include treadmill
-            </button>
-          </>
-        }
-      >
-        Pace &amp; biomechanics
-      </SectionLabel>
+      {tab === "records" && (
+        <>
+          <PanelTitle
+            title="Personal records"
+            subtitle="Your best efforts at each distance, with the fitness (VDOT) each one shows."
+          />
+          <PersonalRecordsGrid records={records} runs={runs} />
+        </>
+      )}
+
+      {tab === "form" && (
+        <>
+          <PanelTitle
+            title="Pace & biomechanics"
+            subtitle="How your running form is changing, from your watch's running-dynamics data."
+          />
+          <div className="mb-3.5 flex flex-wrap justify-end gap-4 text-xs text-text-muted">
+            <span className="flex items-center gap-1.5">
+              <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#8c86c8" /></svg>Outdoor run
+            </span>
+            <span className="flex items-center gap-1.5">
+              <svg width="10" height="10"><circle cx="5" cy="5" r="3.5" fill="none" stroke="#38d6ff" strokeWidth="1.5" /></svg>Treadmill
+            </span>
+            <span className="flex items-center gap-1.5">
+              <i className="inline-block h-[3px] w-3.5 rounded-sm bg-positive" />Trend · improving
+            </span>
+            <span className="flex items-center gap-1.5">
+              <i className="inline-block h-[3px] w-3.5 rounded-sm bg-amber" />Trend · worsening
+            </span>
+          </div>
 
       <div className="mb-[18px] flex flex-wrap items-center gap-[18px] rounded-[14px] border border-border bg-surface px-[18px] py-3.5">
         <div className="flex items-baseline gap-1.5">
@@ -293,26 +347,25 @@ export default function AnalyticsPage() {
         />
       </section>
 
-      <SectionLabel>Training mix</SectionLabel>
-      <section className="grid grid-cols-1 gap-[18px] lg:grid-cols-2">
-        <WhereYouRunCard data={typeSplit} />
-        <PersonalBaselineCard
-          hrRuns={biomech ? biomech.filter((d) => d.avg_hr != null).length : null}
-          hasDynamics={biomech ? biomech.some((d) => d.avg_cadence != null) : null}
-          easyRunsLast4Weeks={easyRecent ? easyRecent.filter((d) => now - new Date(d.started_at).getTime() <= 28 * 86_400_000).length : null}
-        />
-      </section>
+          <section className="mt-[18px]">
+            <PersonalBaselineCard
+              hrRuns={biomech ? biomech.filter((d) => d.avg_hr != null).length : null}
+              hasDynamics={biomech ? biomech.some((d) => d.avg_cadence != null) : null}
+              easyRunsLast4Weeks={easyRecent ? easyRecent.filter((d) => now - new Date(d.started_at).getTime() <= 28 * 86_400_000).length : null}
+            />
+          </section>
+        </>
+      )}
 
-      <SectionLabel
-        right={
-          <span className="hidden text-xs text-text-muted md:inline">
-            Outdoor runs only · weather at start time · treadmill excluded automatically
-          </span>
-        }
-      >
-        Weather &amp; conditions
-      </SectionLabel>
-      <WeatherSection months={months} />
+      {tab === "conditions" && (
+        <>
+          <PanelTitle
+            title="Weather & conditions"
+            subtitle="How heat and time of day affect your pace. Outdoor runs only; weather at start time."
+          />
+          <WeatherSection data={weather.data} error={weather.error} />
+        </>
+      )}
     </div>
   );
 }

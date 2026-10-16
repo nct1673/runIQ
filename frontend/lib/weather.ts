@@ -171,3 +171,23 @@ export function dayMonth(iso: string): string {
   const d = new Date(iso);
   return `${d.getDate()} ${d.toLocaleDateString(undefined, { month: "short" })}`;
 }
+
+/** Fastest vs usual start-time window over easy outdoor runs at actual pace
+ * (the Start time vs pace card's default view). `fastest` needs at least
+ * MIN_BUCKET_RUNS runs; `usual` is the busiest window. Null when there are
+ * too few runs to bucket. */
+export function startTimeSummary(
+  data: WeatherImpact,
+): { fastest: TimeBucket | null; usual: TimeBucket; diff: number | null } | null {
+  const points = data.runs
+    .filter((r) => r.easy && r.hour >= 4 && r.hour < 22)
+    .map((r) => ({ hour: r.hour, pace: r.pace_s_per_km }));
+  if (points.length < 2) return null;
+
+  const buckets = timeBuckets(points);
+  const solid = buckets.filter((b) => b.n >= MIN_BUCKET_RUNS && b.meanPace != null);
+  const fastest = solid.length ? solid.reduce((a, b) => ((b.meanPace as number) < (a.meanPace as number) ? b : a)) : null;
+  const usual = buckets.reduce((a, b) => (b.n > a.n ? b : a));
+  const diff = fastest && usual.meanPace != null && fastest.meanPace != null ? usual.meanPace - fastest.meanPace : null;
+  return { fastest, usual, diff };
+}
