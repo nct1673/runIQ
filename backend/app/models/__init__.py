@@ -10,6 +10,7 @@ from app.models.conversation import Conversation
 from app.models.conversation_message import ConversationMessage
 from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.personal_record import PersonalRecord
+from app.models.planned_run import PlannedRun
 from app.models.race import Race
 from app.models.training_load import TrainingLoad
 from app.models.user import User
@@ -26,6 +27,7 @@ __all__ = [
     "ConversationMessage",
     "KnowledgeChunk",
     "PersonalRecord",
+    "PlannedRun",
     "Race",
     "TrainingLoad",
     "User",

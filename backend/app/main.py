@@ -14,6 +14,7 @@ from app.api.routes import (
     auth,
     chat,
     personal_records,
+    planned_runs,
     profile,
     races,
     video_analysis,
@@ -66,6 +67,9 @@ app.include_router(
     prefix="/api/personal-records",
     tags=["personal-records"],
     dependencies=_protected,
+)
+app.include_router(
+    planned_runs.router, prefix="/api/planned-runs", tags=["planned-runs"], dependencies=_protected
 )
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"], dependencies=_protected)
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"], dependencies=_protected)
