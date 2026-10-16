@@ -7,6 +7,7 @@ import PersonalRecordsGrid, { RunRow } from "@/components/analytics/PersonalReco
 import { PersonalRecord } from "@/components/analytics/records";
 import ScatterTrendCard from "@/components/analytics/ScatterTrendCard";
 import { PersonalBaselineCard, TypeSplitEntry, WhereYouRunCard } from "@/components/analytics/TrainingMix";
+import WeatherSection from "@/components/analytics/weather/WeatherSection";
 import { analyzeSeries, SeriesPoint } from "@/components/analytics/trendStats";
 import { BiomechanicsTrendPoint } from "@/components/charts/MetricTrendChart";
 import { PaceTrendPoint } from "@/components/charts/PaceTrendChart";
@@ -301,6 +302,17 @@ export default function AnalyticsPage() {
           easyRunsLast4Weeks={easyRecent ? easyRecent.filter((d) => now - new Date(d.started_at).getTime() <= 28 * 86_400_000).length : null}
         />
       </section>
+
+      <SectionLabel
+        right={
+          <span className="hidden text-xs text-text-muted md:inline">
+            Outdoor runs only · weather at start time · treadmill excluded automatically
+          </span>
+        }
+      >
+        Weather &amp; conditions
+      </SectionLabel>
+      <WeatherSection months={months} />
     </div>
   );
 }

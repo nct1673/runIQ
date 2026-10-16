@@ -62,3 +62,86 @@ class TypeSplitEntry(BaseModel):
     activity_type: str
     runs: int
     distance_km: float
+
+
+# --- Weather & conditions (app.services.weather_impact_service) -------------
+
+
+class WeatherRunPoint(BaseModel):
+    activity_id: str
+    started_at: datetime
+    hour: float  # local start time, 0-24
+    feels_like_c: float
+    temperature_c: float | None = None
+    pace_s_per_km: float
+    avg_hr: float | None = None
+    distance_km: float
+    easy: bool  # mostly Zone 1-2 and 3-15 km
+    same_effort_pace_s_per_km: float | None = None  # pace at the reference heart rate
+    heat_adjusted_pace_s_per_km: float | None = None  # pace at the reference feels-like
+
+
+class HeatModel(BaseModel):
+    heat_s_per_km_per_c: float  # extra s/km per +1 degC feels-like, same heart rate
+    heat_se: float
+    ci_low: float  # 95% interval
+    ci_high: float
+    hr_s_per_km_per_bpm: float
+    r2: float
+    n: int
+    confidence: str  # "high" | "moderate" | "low"
+    feels_like_min: float
+    feels_like_max: float
+    mean_feels_like_c: float
+    mean_same_effort_pace_s_per_km: float
+
+
+class MonthlyHeatCost(BaseModel):
+    month: date
+    runs: int
+    spread_c: float | None = None
+    slope_s_per_km_per_c: float | None = None
+    se: float | None = None
+    reliable: bool
+    reason: str | None = None
+
+
+class HeatCostChange(BaseModel):
+    from_month: date
+    to_month: date
+    from_value: float
+    to_value: float
+    pct_change: float
+    confidence: str  # "ok" | "low" (a monthly slope is within ~2 standard errors of zero)
+
+
+class WeeklyAdjustedPoint(BaseModel):
+    week_start: date
+    runs: int
+    actual_pace_s_per_km: float
+    adjusted_pace_s_per_km: float
+
+
+class AdjustedSummary(BaseModel):
+    from_month: date
+    to_month: date
+    actual_from: float
+    actual_to: float
+    adjusted_from: float
+    adjusted_to: float
+    weather_share_s: float
+
+
+class WeatherImpactOut(BaseModel):
+    months: int
+    reference_hr_bpm: float
+    reference_feels_like_c: float
+    outdoor_runs: int
+    easy_runs: int
+    model: HeatModel | None = None
+    model_unavailable_reason: str | None = None
+    runs: list[WeatherRunPoint]
+    monthly: list[MonthlyHeatCost]
+    heat_cost_change: HeatCostChange | None = None
+    weekly: list[WeeklyAdjustedPoint]
+    adjusted_summary: AdjustedSummary | None = None

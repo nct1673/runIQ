@@ -12,9 +12,10 @@ from app.schemas.analytics import (
     PaceTrendPoint,
     SummaryOut,
     TypeSplitEntry,
+    WeatherImpactOut,
     WeeklyMileagePoint,
 )
-from app.services import analytics_service
+from app.services import analytics_service, weather_impact_service
 from app.services.user_service import get_or_create_default_user
 
 router = APIRouter()
@@ -89,3 +90,14 @@ def get_baseline(db: Session = Depends(get_db)) -> dict:
 def get_similar_runs(activity_id: str, db: Session = Depends(get_db)) -> dict:
     """Historically similar runs to one activity -- blueprint SS13."""
     raise NotImplementedError("Phase 3: app.services.similar_run_service.find_similar")
+
+
+@router.get("/weather-impact", response_model=WeatherImpactOut)
+def get_weather_impact(
+    months: int = Query(12, ge=1, le=24), db: Session = Depends(get_db)
+) -> WeatherImpactOut:
+    """Heat cost, heat adaptation, start-time and heat-adjusted pace for
+    outdoor runs over the last `months` calendar months (treadmill runs
+    have no weather and are excluded). See weather_impact_service."""
+    user = get_or_create_default_user(db)
+    return weather_impact_service.get_weather_impact(db, user.id, months=months)
