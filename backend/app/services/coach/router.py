@@ -68,8 +68,8 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "get_baseline",
-            "description": "Get the user's personal baseline (typical pace, HR, cadence) based "
-            "on all their historical runs.",
+            "description": "Get the user's personal baseline (typical easy pace, HR, cadence, weekly distance, long run) based "
+            "on their easy runs over the last 8 weeks.",
             "parameters": {"type": "object", "properties": {}},
         },
     },

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.schemas.analytics import (
+    BaselineOut,
     BiomechanicsTrendPoint,
     MonthlyMileagePoint,
     PaceTrendPoint,
@@ -15,7 +16,7 @@ from app.schemas.analytics import (
     WeatherImpactOut,
     WeeklyMileagePoint,
 )
-from app.services import analytics_service, weather_impact_service
+from app.services import analytics_service, baseline_service, weather_impact_service
 from app.services.user_service import get_or_create_default_user
 
 router = APIRouter()
@@ -80,10 +81,13 @@ def get_type_split(db: Session = Depends(get_db)) -> list[TypeSplitEntry]:
     return analytics_service.get_type_split(db, user.id)
 
 
-@router.get("/baseline")
-def get_baseline(db: Session = Depends(get_db)) -> dict:
-    """The user's personal baseline -- blueprint SS12."""
-    raise NotImplementedError("Phase 3: app.services.baseline_service.compute_baseline")
+@router.get("/baseline", response_model=BaselineOut)
+def get_baseline(db: Session = Depends(get_db)) -> BaselineOut:
+    """Personal baseline over the last 8 weeks: typical easy pace/HR/cadence,
+    weekly distance, long run, easy share -- null values until enough easy
+    runs exist (see baseline_service)."""
+    user = get_or_create_default_user(db)
+    return baseline_service.compute_baseline(db, user.id)
 
 
 @router.get("/similar-runs/{activity_id}")
