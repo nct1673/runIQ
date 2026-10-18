@@ -16,7 +16,8 @@ RUN pip install --no-cache-dir \
     -r requirements.txt
 
 COPY . .
-RUN chmod +x docker-entrypoint.sh
+# Strip Windows line endings in case the checkout converted them.
+RUN sed -i "s/\r$//" docker-entrypoint.sh && chmod +x docker-entrypoint.sh
 
 # Packaged default: migrate, check first-run settings, then serve. The dev
 # override (docker-compose.dev.yml) replaces the entrypoint and adds --reload.
