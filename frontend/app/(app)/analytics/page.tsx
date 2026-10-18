@@ -9,7 +9,7 @@ import { SummaryCards } from "@/components/analytics/OverviewSummary";
 import PersonalRecordsGrid, { RunRow } from "@/components/analytics/PersonalRecordsGrid";
 import { PersonalRecord } from "@/components/analytics/records";
 import ScatterTrendCard from "@/components/analytics/ScatterTrendCard";
-import { PersonalBaselineCard, TypeSplitEntry, WhereYouRunCard } from "@/components/analytics/TrainingMix";
+import { Baseline, PersonalBaselineCard, TypeSplitEntry, WhereYouRunCard } from "@/components/analytics/TrainingMix";
 import { useWeatherImpact } from "@/components/analytics/weather/useWeatherImpact";
 import WeatherSection from "@/components/analytics/weather/WeatherSection";
 import { analyzeSeries, SeriesPoint } from "@/components/analytics/trendStats";
@@ -67,13 +67,13 @@ export default function AnalyticsPage() {
   const [typeSplit, setTypeSplit] = useState<TypeSplitEntry[] | null>(null);
   const [paceTrend, setPaceTrend] = useState<PaceTrendPoint[] | null>(null);
   const [biomech, setBiomech] = useState<BiomechanicsTrendPoint[] | null>(null);
-  const [easyRecent, setEasyRecent] = useState<PaceTrendPoint[] | null>(null);
+  const [baseline, setBaseline] = useState<Baseline | null>(null);
 
   useEffect(() => {
     getJson("/api/personal-records", setRecords);
     getJson("/api/activities", setRuns);
     getJson("/api/analytics/type-split", setTypeSplit);
-    getJson("/api/analytics/pace-trend?months=1", setEasyRecent);
+    getJson("/api/analytics/baseline", setBaseline);
   }, []);
 
   const weather = useWeatherImpact(months);
@@ -134,7 +134,6 @@ export default function AnalyticsPage() {
     .map(([n]) => n);
 
   const common = { rangeStart, rangeEnd };
-  const now = Date.now();
 
   const formSummary = statList.length ? { improving: improvingCount, total: statList.length, worsening } : null;
   const conditionsTab = tab === "conditions"; // weather is outdoor-only, so the treadmill switch doesn't apply
@@ -348,11 +347,7 @@ export default function AnalyticsPage() {
       </section>
 
           <section className="mt-[18px]">
-            <PersonalBaselineCard
-              hrRuns={biomech ? biomech.filter((d) => d.avg_hr != null).length : null}
-              hasDynamics={biomech ? biomech.some((d) => d.avg_cadence != null) : null}
-              easyRunsLast4Weeks={easyRecent ? easyRecent.filter((d) => now - new Date(d.started_at).getTime() <= 28 * 86_400_000).length : null}
-            />
+            <PersonalBaselineCard baseline={baseline} />
           </section>
         </>
       )}
