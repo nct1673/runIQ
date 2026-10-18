@@ -2,27 +2,45 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * UX redirect only -- checks whether the session cookie is *present*,
- * not valid. The backend's `get_current_user` dependency (see
- * backend/app/services/user_service.py) is the real security boundary;
- * every protected API route enforces it independently, so a request
- * that skips this middleware entirely still can't read real data.
+ * Page-level gate: a request with no session cookie, or one the backend no
+ * longer accepts (expired, signed with an old secret, from another install on
+ * the same host -- cookies are shared across localhost ports), is sent to
+ * /login and the dead cookie is cleared. The backend's `get_current_user`
+ * dependency (see backend/app/services/user_service.py) is still the real
+ * security boundary; every protected API route enforces it independently.
  */
 const SESSION_COOKIE = "session";
 const PUBLIC_PATHS = ["/login"];
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-export function middleware(request: NextRequest) {
+/** Does the backend accept this request's session cookie? If the backend
+ * can't be reached we can't tell, so fall back to trusting the cookie. */
+async function sessionIsValid(request: NextRequest): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/api/auth/me`, {
+      headers: { cookie: request.headers.get("cookie") ?? "" },
+      cache: "no-store",
+    });
+    return res.status !== 401;
+  } catch {
+    return true;
+  }
+}
+
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isPublic = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
-  const hasSession = request.cookies.has(SESSION_COOKIE);
+  const hasCookie = request.cookies.has(SESSION_COOKIE);
+  const valid = hasCookie && (await sessionIsValid(request));
 
-  if (!isPublic && !hasSession) {
-    const loginUrl = new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+  if (!valid) {
+    const response = isPublic ? NextResponse.next() : NextResponse.redirect(new URL("/login", request.url));
+    if (hasCookie) response.cookies.delete(SESSION_COOKIE);
+    return response;
   }
 
-  if (pathname === "/login" && hasSession) {
+  if (pathname === "/login") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
