@@ -12,10 +12,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # either way: it injects real env vars via `env_file:`, which
 # pydantic-settings reads regardless of whether this file exists.
 _REPO_ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
+# Secrets the Docker entrypoint generates on first start (see docker-entrypoint.sh),
+# read here too so `docker compose exec` commands see them. Real env vars win.
+_GENERATED_SECRETS = Path(__file__).resolve().parents[2] / "data" / ".secrets.env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=_REPO_ROOT_ENV, extra="ignore")
+    model_config = SettingsConfigDict(env_file=(_REPO_ROOT_ENV, _GENERATED_SECRETS), extra="ignore")
 
     # Database
     database_url: str = "postgresql+psycopg2://runiq:runiq@localhost:5432/runiq"

@@ -16,5 +16,9 @@ RUN pip install --no-cache-dir \
     -r requirements.txt
 
 COPY . .
+RUN chmod +x docker-entrypoint.sh
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Packaged default: migrate, check first-run settings, then serve. The dev
+# override (docker-compose.dev.yml) replaces the entrypoint and adds --reload.
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
