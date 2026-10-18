@@ -50,6 +50,10 @@ _BLOCKED_FUNCS = {
     "set_config", "current_setting", "pg_sleep", "pg_sleep_for", "pg_sleep_until",
     "nextval", "setval", "currval", "txid_current", "query_to_xml", "table_to_xml",
     "database_to_xml", "schema_to_xml", "xpath", "version", "current_version",
+    # Identity / server details: nothing the coach needs, and no reason to reveal them.
+    "current_user", "session_user", "user", "current_database", "current_catalog",
+    "current_schema", "current_schemas", "inet_server_addr", "inet_server_port",
+    "inet_client_addr", "inet_client_port",
 }
 _BLOCKED_PREFIXES = (
     "dblink", "lo_", "pg_read", "pg_ls", "pg_stat", "pg_terminate", "pg_cancel", "pg_reload",
