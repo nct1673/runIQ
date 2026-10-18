@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RunIQ Tech Stack</title>
+<style>
+  :root { --bg:#f6f7fb; --card:#fff; --text:#1c1b2e; --muted:#6b6a80; --line:#e4e4ef; --accent:#7c4dff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f0d1c; --card:#1a1730; --text:#ecebf7; --muted:#9a98b5; --line:#2e2a4d; --accent:#a27bff; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:980px; margin:0 auto; padding:40px 16px 64px; }
+  h1 { margin:0 0 6px; font-size:30px; }
+  .sub { color:var(--muted); margin:0 0 28px; }
+  h2 { margin:36px 0 14px; font-size:18px; }
+  .flow { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:8px; }
+  .flow span.n { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 14px; font-weight:600; }
+  .flow span.a { color:var(--muted); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .card h3 { margin:0 0 10px; font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); }
+  .card ul { list-style:none; margin:0; padding:0; }
+  .card li { padding:6px 0; border-top:1px solid var(--line); }
+  .card li:first-child { border-top:0; }
+  .card b { font-weight:600; }
+  .card small { display:block; color:var(--muted); font-size:13px; }
+  .tag { display:inline-block; font-size:11px; padding:1px 8px; border-radius:99px; background:var(--accent); color:#fff; margin-left:6px; vertical-align:middle; }
+  footer { margin-top:36px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>RunIQ Tech Stack</h1>
+  <p class="sub">A running-intelligence platform: sync Garmin data, analyse it, and talk to an AI coach about it.</p>
+
+  <h2>How it fits together</h2>
+  <div class="flow">
+    <span class="n">Browser<br><small>Next.js + React</small></span><span class="a">→</span>
+    <span class="n">API<br><small>FastAPI</small></span><span class="a">→</span>
+    <span class="n">Database<br><small>PostgreSQL + pgvector</small></span>
+  </div>
+  <div class="flow">
+    <span class="n">Garmin Connect</span><span class="a">→ ingestion →</span>
+    <span class="n">pandas / SQLAlchemy</span><span class="a">→</span>
+    <span class="n">analytics, ML, coach (RAG)</span>
+  </div>
+
+  <h2>Frontend</h2>
+  <div class="grid">
+    <div class="card"><h3>Framework</h3><ul>
+      <li><b>Next.js 15</b> <small>App Router, server + client components</small></li>
+      <li><b>React 19</b> <small>UI library</small></li>
+      <li><b>TypeScript 5</b> <small>Type-checked code</small></li>
+    </ul></div>
+    <div class="card"><h3>Styling</h3><ul>
+      <li><b>Tailwind CSS 4</b> <small>Utility classes, dark theme tokens</small></li>
+      <li><b>PostCSS</b> <small>CSS build pipeline</small></li>
+    </ul></div>
+    <div class="card"><h3>Notes</h3><ul>
+      <li><b>No chart/UI library</b> <small>Charts and components are hand-built</small></li>
+      <li><b>Node 20</b> <small>Runtime in the Docker image</small></li>
+    </ul></div>
+  </div>
+
+  <h2>Backend</h2>
+  <div class="grid">
+    <div class="card"><h3>API</h3><ul>
+      <li><b>Python 3.11</b></li>
+      <li><b>FastAPI</b> + <b>Uvicorn</b> <small>REST API server</small></li>
+      <li><b>Pydantic v2</b> <small>Validation and settings</small></li>
+      <li><b>httpx</b> <small>Outgoing HTTP calls</small></li>
+      <li><b>bcrypt</b> <small>Password hashing</small></li>
+    </ul></div>
+    <div class="card"><h3>Data &amp; ingestion</h3><ul>
+      <li><b>garminconnect</b> <small>Pulls activities and records from Garmin</small></li>
+      <li><b>pandas</b>, <b>NumPy</b>, <b>SciPy</b> <small>Cleaning and calculations</small></li>
+      <li><b>Pandera</b> <small>DataFrame validation</small></li>
+    </ul></div>
+    <div class="card"><h3>Database</h3><ul>
+      <li><b>PostgreSQL 16</b> <small>Main data store</small></li>
+      <li><b>pgvector</b> <small>Vector search for the coach's knowledge base</small></li>
+      <li><b>SQLAlchemy 2</b> <small>ORM</small></li>
+      <li><b>Alembic</b> <small>Schema migrations</small></li>
+      <li><b>psycopg2</b> <small>Postgres driver</small></li>
+    </ul></div>
+  </div>
+
+  <h2>AI &amp; machine learning</h2>
+  <div class="grid">
+    <div class="card"><h3>AI Coach (RAG)</h3><ul>
+      <li><b>Ollama</b> <span class="tag">default</span> <small>Local chat model (qwen3:14b) with tool calling</small></li>
+      <li><b>Google Gemini</b> <span class="tag">optional</span> <small>Via LangChain (<code>langchain-google-genai</code>)</small></li>
+      <li><b>nomic-embed-text</b> <small>768-dim embeddings via Ollama</small></li>
+      <li><b>Markdown knowledge base</b> <small>Training, recovery, heat, biomechanics notes</small></li>
+      <li><b>sqlglot</b> <small>Validates read-only SQL the coach may run</small></li>
+    </ul></div>
+    <div class="card"><h3>Modelling</h3><ul>
+      <li><b>scikit-learn</b>, <b>XGBoost</b>, <b>LightGBM</b> <small>Predictive models</small></li>
+      <li><b>SHAP</b> <small>Explaining model output</small></li>
+      <li><b>MLflow</b> <small>Experiment tracking</small></li>
+    </ul></div>
+    <div class="card"><h3>Video form analysis</h3><ul>
+      <li><b>MediaPipe</b> 0.10.14 <small>Pose estimation</small></li>
+      <li><b>OpenCV</b> (headless) <small>Video frame handling</small></li>
+    </ul></div>
+  </div>
+
+  <h2>External services</h2>
+  <div class="grid">
+    <div class="card"><h3>Data sources</h3><ul>
+      <li><b>Garmin Connect</b> <small>Activities, personal records</small></li>
+      <li><b>OpenWeather</b> <small>Hourly weather for each run</small></li>
+    </ul></div>
+  </div>
+
+  <h2>Tooling &amp; deployment</h2>
+  <div class="grid">
+    <div class="card"><h3>Run &amp; build</h3><ul>
+      <li><b>Docker Compose</b> <small>Three containers: frontend, backend, postgres</small></li>
+      <li><b>Conda (conda-forge)</b> <small>Local Python environment</small></li>
+    </ul></div>
+    <div class="card"><h3>Quality</h3><ul>
+      <li><b>pytest</b> <small>Backend tests</small></li>
+      <li><b>Ruff</b> <small>Python lint</small></li>
+      <li><b>TypeScript</b> <small>Frontend type checks</small></li>
+    </ul></div>
+  </div>
+
+  <footer>Read from <code>frontend/package.json</code>, <code>backend/requirements.txt</code>, <code>backend/environment.yml</code>, <code>docker-compose.yml</code> and <code>backend/app/core/config.py</code>.</footer>
+</main>
+</body>
+</html>
