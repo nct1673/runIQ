@@ -1,5 +1,8 @@
 # Hot-reload development. Use together with the base file:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Keeps the original project name, so the dev database volume and images are unchanged.
+name: runiq
+
 services:
   postgres:
     ports:

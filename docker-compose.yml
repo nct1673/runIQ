@@ -1,5 +1,9 @@
 # RunIQ, packaged: `cp .env.example .env`, set AUTH_PASSWORD, `docker compose up -d`,
 # then open http://localhost:3000. Hot-reload development uses docker-compose.dev.yml.
+# Fixed project name, so containers/images/volumes don't depend on the folder you
+# cloned into (and can't collide with another copy, or with the dev stack).
+name: runiq-app
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -19,6 +23,9 @@ services:
 
   backend:
     build: ./backend
+    # Always rebuild from the current source on `up` (layer cache keeps it quick), so a
+    # `git pull` followed by `docker compose up -d` can't keep running an old image.
+    pull_policy: build
     restart: unless-stopped
     env_file:
       - path: .env
@@ -45,6 +52,7 @@ services:
 
   frontend:
     build: ./frontend
+    pull_policy: build
     restart: unless-stopped
     # Localhost only. Change the host port with RUNIQ_PORT in .env or the shell.
     ports:
