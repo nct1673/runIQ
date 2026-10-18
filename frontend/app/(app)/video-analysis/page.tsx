@@ -323,7 +323,7 @@ export default function VideoAnalysisPage() {
           </div>
           {video && (
             <div className="flex gap-2.5">
-              {/* Compare / Export report: designed in the draft, no backend yet. */}
+              {/* Compare: designed in the draft, no backend yet. */}
               <button type="button" disabled title="Coming soon" className="flex h-[38px] items-center gap-2 rounded-[10px] border border-border bg-surface px-3.5 text-[13px] font-medium text-text-soft opacity-50">
                 Compare
               </button>
@@ -335,9 +335,6 @@ export default function VideoAnalysisPage() {
               >
                 <RefreshIcon className={"h-[15px] w-[15px]" + (busy ? " animate-spin" : "")} />
                 {busy ? "Analysing..." : video.status === "completed" ? "Re-analyse" : "Analyse"}
-              </button>
-              <button type="button" disabled title="Coming soon" className="flex h-[38px] items-center gap-2 rounded-[10px] bg-[linear-gradient(135deg,#a27bff,#ff4d8d)] px-3.5 text-[13px] font-semibold text-white opacity-50">
-                Export report
               </button>
             </div>
           )}
