@@ -61,6 +61,16 @@ services:
       backend:
         condition: service_healthy
 
+  # Optional marketing page: `docker compose --profile landing up -d landing`,
+  # then open http://localhost:3030. Static files only; independent of the app.
+  landing:
+    build: ./landing
+    pull_policy: build
+    profiles: ["landing"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${LANDING_PORT:-3030}:80"
+
   # Optional: `docker compose --profile ollama up -d`. Serves the embedding model the
   # coach's knowledge search needs (small), and the chat model if LLM_PROVIDER=ollama
   # (large, wants a GPU).
