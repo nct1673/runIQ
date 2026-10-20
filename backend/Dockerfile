@@ -4,7 +4,7 @@ WORKDIR /app
 
 # System deps for psycopg2 / scientific stack builds.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev \
+    build-essential libpq-dev libgl1 libglib2.0-0 ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -16,5 +16,10 @@ RUN pip install --no-cache-dir \
     -r requirements.txt
 
 COPY . .
+# Strip Windows line endings in case the checkout converted them.
+RUN sed -i "s/\r$//" docker-entrypoint.sh && chmod +x docker-entrypoint.sh
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Packaged default: migrate, check first-run settings, then serve. The dev
+# override (docker-compose.dev.yml) replaces the entrypoint and adds --reload.
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

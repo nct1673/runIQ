@@ -2,13 +2,24 @@
 
 Wires together the FastAPI app, session/CORS middleware, and the
 versioned API routers. Business logic lives in app.services /
-app.ingestion / app.ml -- this file only assembles the app.
+app.ingestion -- this file only assembles the app.
 """
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api.routes import activities, analytics, auth, chat, predictions, profile, races, weather
+from app.api.routes import (
+    activities,
+    analytics,
+    auth,
+    chat,
+    personal_records,
+    planned_runs,
+    profile,
+    races,
+    video_analysis,
+    weather,
+)
 from app.core.config import get_settings
 from app.services.user_service import get_current_user
 
@@ -50,12 +61,24 @@ app.include_router(
     analytics.router, prefix="/api/analytics", tags=["analytics"], dependencies=_protected
 )
 app.include_router(weather.router, prefix="/api/weather", tags=["weather"], dependencies=_protected)
-app.include_router(
-    predictions.router, prefix="/api/predictions", tags=["predictions"], dependencies=_protected
-)
 app.include_router(races.router, prefix="/api/races", tags=["races"], dependencies=_protected)
+app.include_router(
+    personal_records.router,
+    prefix="/api/personal-records",
+    tags=["personal-records"],
+    dependencies=_protected,
+)
+app.include_router(
+    planned_runs.router, prefix="/api/planned-runs", tags=["planned-runs"], dependencies=_protected
+)
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"], dependencies=_protected)
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"], dependencies=_protected)
+app.include_router(
+    video_analysis.router,
+    prefix="/api/video-analysis",
+    tags=["video-analysis"],
+    dependencies=_protected,
+)
 
 
 @app.get("/health")

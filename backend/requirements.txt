@@ -14,6 +14,12 @@ shap>=0.45
 httpx>=0.27
 python-dotenv>=1.0
 pgvector>=0.2
+langchain-google-genai>=4.0  # Gemini chat for the AI Coach (LLM_PROVIDER=gemini)
 garminconnect>=0.2.24
 bcrypt>=4.1
 pytz>=2024.1
+python-multipart>=0.0.9
+mediapipe==0.10.14  # newer releases (1.1.0 checked) have no legacy mp.solutions API, which extract.py uses
+opencv-python-headless>=4.9
+scipy>=1.11
+sqlglot>=25.0  # SQL validation for the Coach free-form query tool

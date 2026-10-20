@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.activity import Activity
+from app.models.weather import WeatherCondition
 
 
 def get_summary(db: Session, user_id: uuid.UUID) -> dict:
@@ -53,13 +54,37 @@ def get_summary(db: Session, user_id: uuid.UUID) -> dict:
         (this_week_km - last_week_km) / last_week_km * 100 if last_week_km > 0 else None
     )
 
+    vo2_max = _latest_vo2max_as_of(db, user_id, now)
+    vo2_max_7d_ago = _latest_vo2max_as_of(db, user_id, now - timedelta(days=7))
+    vo2max_delta_pct = (
+        (vo2_max - vo2_max_7d_ago) / vo2_max_7d_ago * 100
+        if vo2_max is not None and vo2_max_7d_ago is not None and vo2_max_7d_ago > 0
+        else None
+    )
+
     return {
         "total_runs": total_runs,
         "total_distance_km": total_distance_km,
         "total_duration_s": total_duration_s,
         "avg_pace_s_per_km": avg_pace_s_per_km,
         "distance_delta_pct": distance_delta_pct,
+        "vo2_max": vo2_max,
+        "vo2max_delta_pct": vo2max_delta_pct,
     }
+
+
+def _latest_vo2max_as_of(db: Session, user_id: uuid.UUID, cutoff: datetime) -> float | None:
+    """Most recent known vo2_max reading at or before `cutoff` -- Garmin
+    estimates vo2_max per run (not daily), so "vo2_max as of 7 days ago"
+    means the latest reading that had landed by then, not a reading from
+    that exact day.
+    """
+    return db.execute(
+        select(Activity.vo2_max)
+        .where(Activity.user_id == user_id, Activity.vo2_max.isnot(None), Activity.started_at <= cutoff)
+        .order_by(Activity.started_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
 
 
 def get_weekly_mileage(db: Session, user_id: uuid.UUID, weeks: int = 10) -> list[dict]:
@@ -178,29 +203,52 @@ def get_pace_trend(db: Session, user_id: uuid.UUID, months: int = 6) -> list[dic
 
 def get_biomechanics_trend(db: Session, user_id: uuid.UUID, months: int = 6) -> list[dict]:
     """Cadence/stride/vertical-oscillation/vertical-ratio/ground-contact-
-    time for AEROBIC_BASE runs in the last `months` calendar months,
-    oldest to newest -- same basis as get_pace_trend (see
-    _recent_aerobic_base_activities), one row per activity with all five
-    metrics together so the frontend can chart each as its own card
-    from a single fetch. Individual metrics are nullable on Activity
-    (not every device/activity records all of them); rows are still
-    included with whichever fields are present, since a per-metric chart
-    filters its own nulls.
+    time, plus HR/power/elevation/calories/weather, for AEROBIC_BASE runs
+    in the last `months` calendar months, oldest to newest -- same basis
+    as get_pace_trend (see _recent_aerobic_base_activities), one row per
+    activity with every metric together so the frontend can chart each as
+    its own card from a single fetch. Individual metrics are nullable
+    (not every device/activity records all of them, and weather is only
+    matched for outdoor runs with GPS); rows are still included with
+    whichever fields are present, since a per-metric chart filters its
+    own nulls.
     """
-    return [
-        {
-            "activity_id": str(a.id),
-            "started_at": a.started_at,
-            "distance_km": a.distance_km,
-            "activity_type": a.activity_type,
-            "avg_cadence": a.avg_cadence,
-            "avg_stride_length": a.avg_stride_length,
-            "avg_vertical_oscillation": a.avg_vertical_oscillation,
-            "avg_vertical_ratio": a.avg_vertical_ratio,
-            "avg_ground_contact_time": a.avg_ground_contact_time,
+    activities = _recent_aerobic_base_activities(db, user_id, months)
+    activity_ids = [a.id for a in activities]
+
+    weather_by_activity_id = {}
+    if activity_ids:
+        weather_by_activity_id = {
+            w.activity_id: w
+            for w in db.scalars(
+                select(WeatherCondition).where(WeatherCondition.activity_id.in_(activity_ids))
+            )
         }
-        for a in _recent_aerobic_base_activities(db, user_id, months)
-    ]
+
+    rows = []
+    for a in activities:
+        weather = weather_by_activity_id.get(a.id)
+        rows.append(
+            {
+                "activity_id": str(a.id),
+                "started_at": a.started_at,
+                "distance_km": a.distance_km,
+                "activity_type": a.activity_type,
+                "avg_cadence": a.avg_cadence,
+                "avg_stride_length": a.avg_stride_length,
+                "avg_vertical_oscillation": a.avg_vertical_oscillation,
+                "avg_vertical_ratio": a.avg_vertical_ratio,
+                "avg_ground_contact_time": a.avg_ground_contact_time,
+                "avg_hr": a.avg_hr,
+                "avg_power": a.avg_power,
+                "norm_power": a.norm_power,
+                "elevation_gain_m": a.elevation_gain_m,
+                "calories": a.calories,
+                "temperature_c": weather.temperature_c if weather else None,
+                "humidity_pct": weather.humidity_pct if weather else None,
+            }
+        )
+    return rows
 
 
 def get_type_split(db: Session, user_id: uuid.UUID) -> list[dict]:

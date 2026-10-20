@@ -54,7 +54,7 @@ would be tomorrow's second caller of the exact same functions.
 | 2. Running Analytics | `app/services/analytics_service.py`, `baseline_service.py`, `similar_run_service.py` |
 | — Weather Intelligence | `app/services/weather_service.py` |
 | 3. Training Intelligence | `app/services/training_load_service.py` |
-| 4. Performance Prediction | `app/ml/`, `app/services/prediction_service.py` |
+| 4. Performance Prediction | removed 2026-10-14 (`app/ml/`, `prediction_service.py` deleted) — pending redesign as a race tracking system, see `docs/roadmap.md` |
 | 5. Goals | `app/services/goal_service.py` |
 | 6. AI Running Coach | `app/services/coach/` |
 | 7. Running Form Analysis (optional) | not scaffolded yet — Phase 10 |

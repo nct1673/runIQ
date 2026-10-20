@@ -12,10 +12,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # either way: it injects real env vars via `env_file:`, which
 # pydantic-settings reads regardless of whether this file exists.
 _REPO_ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
+# Secrets the Docker entrypoint generates on first start (see docker-entrypoint.sh),
+# read here too so `docker compose exec` commands see them. Real env vars win.
+_GENERATED_SECRETS = Path(__file__).resolve().parents[2] / "data" / ".secrets.env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=_REPO_ROOT_ENV, extra="ignore")
+    model_config = SettingsConfigDict(env_file=(_REPO_ROOT_ENV, _GENERATED_SECRETS), extra="ignore")
 
     # Database
     database_url: str = "postgresql+psycopg2://runiq:runiq@localhost:5432/runiq"
@@ -41,11 +44,20 @@ class Settings(BaseSettings):
     session_secret_key: str
     auth_password: str | None = None
 
-    # AI Coach (Module 6) -- Ollama, local/GPU-hosted, not a cloud API.
+    # AI Coach (Module 6) -- "ollama" (local/GPU-hosted) or "gemini"
+    # (Google Gemini API via LangChain). Embeddings always use Ollama.
     llm_provider: str = "ollama"
+    gemini_api_key: str | None = None
+    gemini_chat_model: str = "gemini-3.8-flash"
     ollama_base_url: str = "http://localhost:11434"
     ollama_chat_model: str = "qwen3:14b"
     ollama_embed_model: str = "nomic-embed-text"
+
+    # Read-only Postgres login (role `coach_ro`, created by migration
+    # c04a7d1e5b92) used only by the Coach's free-form SQL tool. Host/port/db
+    # are taken from database_url; only the credentials differ.
+    coach_db_user: str = "coach_ro"
+    coach_db_password: str | None = None
 
     # Frontend
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]

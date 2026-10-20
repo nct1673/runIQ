@@ -13,14 +13,14 @@ const TREADMILL = "#38d6ff";
 function SplitBar({ label, outdoorPct }: { label: string; outdoorPct: number }) {
   return (
     <>
-      <div className="flex justify-between text-xs text-text-muted">
+      <div className="flex justify-between text-[13px] text-text-muted">
         <span>{label}</span>
         <span>
           <b className="text-text">{Math.round(outdoorPct)}%</b> outdoor ·{" "}
           <b className="text-text">{Math.round(100 - outdoorPct)}%</b> treadmill
         </span>
       </div>
-      <div className="mb-2.5 mt-1.5 flex h-3.5 gap-[3px] overflow-hidden rounded-full">
+      <div className="mb-5 mt-2 flex h-[18px] gap-[3px] overflow-hidden rounded-full">
         <i style={{ width: `${outdoorPct}%`, background: OUTDOOR }} />
         <i className="flex-1" style={{ background: TREADMILL }} />
       </div>
@@ -30,22 +30,24 @@ function SplitBar({ label, outdoorPct }: { label: string; outdoorPct: number }) 
 
 function Tile({ color, name, km, runs }: { color: string; name: string; km: number; runs: number }) {
   return (
-    <div className="rounded-xl border border-border bg-surface-hover px-4 py-3.5">
-      <div className="flex items-center gap-2 text-[13px] font-semibold">
+    <div className="flex flex-col justify-between rounded-xl border border-border bg-surface-hover px-5 py-5">
+      <div className="flex items-center gap-2 text-sm font-semibold">
         <i className="inline-block h-2.5 w-2.5 rounded-[3px]" style={{ background: color }} />
         {name}
       </div>
-      <div className="mb-0.5 mt-2.5 text-[28px] font-semibold">
+      <div className="my-4 text-[40px] font-semibold leading-none">
         {km.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-        <em className="text-sm font-medium not-italic text-text-muted"> km</em>
+        <em className="text-base font-medium not-italic text-text-muted"> km</em>
       </div>
-      <div className="mt-1.5 flex justify-between text-[12.5px] text-text-muted">
-        <span>Runs</span>
-        <b className="font-semibold text-text">{runs}</b>
-      </div>
-      <div className="mt-1.5 flex justify-between text-[12.5px] text-text-muted">
-        <span>Avg per run</span>
-        <b className="font-semibold text-text">{runs ? (km / runs).toFixed(1) : "--"} km</b>
+      <div className="flex flex-col gap-2.5">
+        <div className="flex justify-between text-[13.5px] text-text-muted">
+          <span>Runs</span>
+          <b className="font-semibold text-text">{runs}</b>
+        </div>
+        <div className="flex justify-between text-[13.5px] text-text-muted">
+          <span>Avg per run</span>
+          <b className="font-semibold text-text">{runs ? (km / runs).toFixed(1) : "--"} km</b>
+        </div>
       </div>
     </div>
   );
@@ -61,7 +63,7 @@ export function WhereYouRunCard({ data }: { data: TypeSplitEntry[] | null }) {
   const totalRuns = o.runs + t.runs;
 
   return (
-    <div className={CARD}>
+    <div className={CARD + " flex flex-col"}>
       <div className="mb-[18px] flex items-center justify-between">
         <CardTitle accent="var(--color-brand)">Where you run</CardTitle>
         {data && (
@@ -75,14 +77,14 @@ export function WhereYouRunCard({ data }: { data: TypeSplitEntry[] | null }) {
       ) : totalRuns === 0 ? (
         <div className="flex h-40 items-center justify-center text-sm text-text-muted">No data yet</div>
       ) : (
-        <>
+        <div className="flex flex-1 flex-col">
           <SplitBar label="By distance" outdoorPct={totalKm ? (o.km / totalKm) * 100 : 0} />
           <SplitBar label="By runs" outdoorPct={totalRuns ? (o.runs / totalRuns) * 100 : 0} />
-          <div className="mt-[18px] grid grid-cols-2 gap-3">
+          <div className="mt-1 grid flex-1 grid-cols-2 gap-3">
             <Tile color={OUTDOOR} name="Outdoor" km={o.km} runs={o.runs} />
             <Tile color={TREADMILL} name="Treadmill" km={t.km} runs={t.runs} />
           </div>
-        </>
+        </div>
       )}
     </div>
   );

@@ -1,14 +1,67 @@
+# RunIQ, packaged: `cp .env.example .env`, set AUTH_PASSWORD, `docker compose up -d`,
+# then open http://localhost:3000. Hot-reload development uses docker-compose.dev.yml.
+# Fixed project name, so containers/images/volumes don't depend on the folder you
+# cloned into (and can't collide with another copy, or with the dev stack).
+name: runiq-app
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: runiq
-      POSTGRES_PASSWORD: runiq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-runiq}
       POSTGRES_DB: runiq
+    # Not published to the host: only the backend (same Docker network) can reach it.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U runiq -d runiq"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    # Always rebuild from the current source on `up` (layer cache keeps it quick), so a
+    # `git pull` followed by `docker compose up -d` can't keep running an old image.
+    pull_policy: build
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg2://runiq:${POSTGRES_PASSWORD:-runiq}@postgres:5432/runiq
+      # Coach embeddings (and Ollama chat, if chosen) come from the optional `ollama`
+      # profile below. Running Ollama on the host instead? Set OLLAMA_URL in .env,
+      # e.g. http://host.docker.internal:11434
+      OLLAMA_BASE_URL: ${OLLAMA_URL:-http://ollama:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - backend_data:/app/data # uploaded videos + generated secrets
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  frontend:
+    build: ./frontend
+    pull_policy: build
+    restart: unless-stopped
+    # Localhost only. Change the host port with RUNIQ_PORT in .env or the shell.
     ports:
-      - "5432:5432"
-      # Optional marketing page: `docker compose --profile landing up -d landing`,
+      - "127.0.0.1:${RUNIQ_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Optional marketing page: `docker compose --profile landing up -d landing`,
   # then open http://localhost:3030. Static files only; independent of the app.
   landing:
     build: ./landing
@@ -18,35 +71,30 @@ services:
     ports:
       - "127.0.0.1:${LANDING_PORT:-3030}:80"
 
-volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  backend:
-    build: ./backend
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql+psycopg2://runiq:runiq@postgres:5432/runiq
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
-    depends_on:
-      - postgres
-
-  frontend:
-    build: ./frontend
+  # Optional: `docker compose --profile ollama up -d`. Serves the embedding model the
+  # coach's knowledge search needs (small), and the chat model if LLM_PROVIDER=ollama
+  # (large, wants a GPU).
+  ollama:
+    image: ollama/ollama
+    profiles: ["ollama"]
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: http://backend:8000
-    ports:
-      - "3000:3000"
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen3:14b}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - backend
+      - ollama_data:/root/.ollama
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        ollama serve &
+        until ollama list >/dev/null 2>&1; do sleep 1; done
+        ollama pull "$$OLLAMA_EMBED_MODEL"
+        if [ "$$LLM_PROVIDER" = "ollama" ]; then ollama pull "$$OLLAMA_CHAT_MODEL"; fi
+        wait
 
 volumes:
   postgres_data:
+  backend_data:
+  ollama_data:

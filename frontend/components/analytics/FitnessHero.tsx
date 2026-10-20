@@ -250,7 +250,7 @@ export default function FitnessHero({
         )}
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface p-[22px] shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+      <div className="flex flex-col rounded-2xl border border-border bg-surface p-[22px] shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
         <div className="mb-[18px] flex flex-wrap items-center justify-between gap-2">
           <CardTitle accent="var(--color-brand)">VDOT by distance</CardTitle>
           <div className="flex gap-3.5 text-xs text-text-muted">
@@ -268,6 +268,7 @@ export default function FitnessHero({
             </span>
           </div>
         </div>
+        <div className="flex flex-1 flex-col justify-evenly">
         {!records ? (
           <div className="flex h-[240px] items-center justify-center text-sm text-text-muted">
             Loading...
@@ -317,6 +318,7 @@ export default function FitnessHero({
             );
           })
         )}
+        </div>
         {/* TODO: insight sentence (e.g. endurance gap vs speed) needs the coach/insight pipeline. */}
         <div className="mt-[18px] flex gap-3 rounded-xl border border-amber/20 border-l-[3px] border-l-amber bg-amber/[0.07] p-3.5">
           <div className="grid h-8 w-8 flex-none place-items-center rounded-[9px] bg-[linear-gradient(135deg,#ffb938,#ff7a45)] text-[#1a1030]">

@@ -23,18 +23,20 @@ export default function KpiCard({
 }) {
   return (
     <div
-      className="rounded-2xl border border-border bg-surface px-5 py-[18px]"
+      className="flex flex-col rounded-2xl border border-border bg-surface px-5 py-[18px]"
       style={{ boxShadow: `inset 0 3px 0 ${accent}, 0 8px 24px rgba(0,0,0,0.2)` }}
     >
       <div className="flex justify-between text-xs font-medium text-text-soft">
         <span>{label}</span>
         {hint && <span className="text-text-muted">{hint}</span>}
       </div>
-      <div className="mb-1 mt-2.5 text-[34px] font-semibold leading-tight tracking-tight tabular-nums">
-        {value}
-        {unit && <span className="ml-1 text-sm font-medium text-text-muted">{unit}</span>}
+      <div className="flex flex-1 flex-col justify-center py-3">
+        <div className="text-[46px] font-semibold leading-none tracking-tight tabular-nums">
+          {value}
+          {unit && <span className="ml-1.5 text-base font-medium text-text-muted">{unit}</span>}
+        </div>
+        {visual && <div className="mt-3">{visual}</div>}
       </div>
-      {visual && <div className="my-2">{visual}</div>}
       <div className="flex items-end justify-between text-xs text-text-muted">
         <span>{footLeft}</span>
         <span>{footRight}</span>
