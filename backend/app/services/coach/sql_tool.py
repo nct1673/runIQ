@@ -22,6 +22,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.activity import Activity
+from app.services import baseline_service
 
 
 def _summarize(db: Session, user_id: uuid.UUID, since: datetime) -> dict:
@@ -56,30 +57,38 @@ def get_recent_summary(db: Session, user_id: uuid.UUID, days: int) -> dict:
     return {"period_days": days, **_summarize(db, user_id, since)}
 
 
+def _pace_text(spread: dict | None) -> dict | None:
+    """Pace spread with mm:ss strings, so the model quotes them instead of converting seconds."""
+    if not spread:
+        return None
+
+    def mmss(seconds: float) -> str:
+        total = round(seconds)
+        return f"{total // 60}:{total % 60:02d} /km"
+
+    return {"typical": mmss(spread["typical"]), "low": mmss(spread["low"]), "high": mmss(spread["high"])}
+
+
 def get_baseline(db: Session, user_id: uuid.UUID) -> dict:
-    """The user's typical/baseline numbers -- lightweight version (all-time
-    average) until app.services.baseline_service is built out; blueprint §12.
-    """
-    row = (
-        db.query(
-            func.count(Activity.id),
-            func.avg(Activity.avg_pace_s_per_km),
-            func.avg(Activity.avg_hr),
-            func.avg(Activity.avg_cadence),
-        )
-        .filter(Activity.user_id == user_id)
-        .one()
-    )
-    count, avg_pace_s_per_km, avg_hr, avg_cadence = row
-
-    if not count:
-        return {"message": "No activities yet -- baseline not available."}
-
+    """The user's personal baseline (blueprint §12): the same numbers the
+    Analytics page shows -- see baseline_service for the method (easy road
+    runs, last 8 weeks, medians)."""
+    baseline = baseline_service.compute_baseline(db, user_id)
+    if not baseline["ready"]:
+        return {
+            "message": "Not enough easy-run data for a personal baseline yet.",
+            "requirements": baseline["requirements"],
+        }
     return {
-        "based_on_runs": count,
-        "avg_pace_s_per_km": round(avg_pace_s_per_km, 1) if avg_pace_s_per_km else None,
-        "avg_hr": round(avg_hr, 1) if avg_hr else None,
-        "avg_cadence": round(avg_cadence, 1) if avg_cadence else None,
+        "window_weeks": baseline["window_weeks"],
+        "based_on_easy_runs": baseline["easy_runs_used"],
+        "easy_pace": _pace_text(baseline["easy_pace_s_per_km"]),
+        "easy_hr_bpm": baseline["easy_hr"],
+        "easy_cadence_spm": baseline["easy_cadence"],
+        "weekly_km": baseline["weekly_km"],
+        "long_run_km": baseline["long_run_km"],
+        "easy_share_pct": baseline["easy_share_pct"],
+        "note": "typical = median; low-high = the user's usual range (10th-90th percentile).",
     }
 
 

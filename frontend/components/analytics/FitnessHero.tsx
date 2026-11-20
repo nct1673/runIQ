@@ -1,4 +1,4 @@
-import { CardTitle, InfoTip } from "@/components/Card";
+import { CardTitle } from "@/components/Card";
 import type { RunRow } from "@/components/analytics/PersonalRecordsGrid";
 import {
   PersonalRecord,
@@ -165,14 +165,6 @@ export default function FitnessHero({
       >
         <div className="mb-1.5 flex items-center justify-between">
           <CardTitle accent="var(--color-violet)">Running fitness</CardTitle>
-          <span className="ml-auto flex items-center gap-1.5 text-xs text-text-soft">
-            What is VDOT?
-            <InfoTip>
-              VDOT is Jack Daniels' fitness number: the VO2max a race time is
-              equivalent to. It adjusts for distance, so a 5 km and a marathon
-              share one scale.
-            </InfoTip>
-          </span>
         </div>
         <div className="text-[11px] font-semibold uppercase tracking-[0.07em] text-text-muted">
           {peak ? `Current VDOT · from your ${peak.label} PR` : "Current VDOT"}
@@ -319,7 +311,6 @@ export default function FitnessHero({
           })
         )}
         </div>
-        {/* TODO: insight sentence (e.g. endurance gap vs speed) needs the coach/insight pipeline. */}
         <div className="mt-[18px] flex gap-3 rounded-xl border border-amber/20 border-l-[3px] border-l-amber bg-amber/[0.07] p-3.5">
           <div className="grid h-8 w-8 flex-none place-items-center rounded-[9px] bg-[linear-gradient(135deg,#ffb938,#ff7a45)] text-[#1a1030]">
             <svg
@@ -335,11 +326,12 @@ export default function FitnessHero({
             </svg>
           </div>
           <div>
-            <h4 className="mb-[3px] text-sm font-semibold">Insight</h4>
+            <h4 className="mb-[3px] text-sm font-semibold">What is VDOT?</h4>
             <p className="text-[12.5px] leading-[1.55] text-text-soft">
-              Distances with a lower VDOT than your peak show where fitness is
-              lagging (usually endurance). Written insights aren&apos;t
-              generated yet.
+              VDOT is Jack Daniels&apos; fitness number: the VO2max a race time
+              is equivalent to. It adjusts for distance, so a 5 km and a
+              marathon share one scale. Distances with a lower VDOT than your
+              peak show where fitness is lagging (usually endurance).
             </p>
           </div>
         </div>

@@ -145,3 +145,33 @@ class WeatherImpactOut(BaseModel):
     heat_cost_change: HeatCostChange | None = None
     weekly: list[WeeklyAdjustedPoint]
     adjusted_summary: AdjustedSummary | None = None
+
+
+class BaselineSpread(BaseModel):
+    typical: float  # median (long run: 75th percentile)
+    low: float  # 10th percentile -- bottom of your usual range
+    high: float  # 90th percentile -- top of your usual range
+
+
+class BaselineRequirements(BaseModel):
+    hr_runs: int
+    hr_runs_required: int
+    has_running_dynamics: bool
+    easy_runs_last_4_weeks: int
+    easy_runs_last_4_weeks_required: int
+
+
+class BaselineOut(BaseModel):
+    """Personal baseline over the last `window_weeks`. The spreads are null
+    until `ready` (see baseline_service for the method and thresholds)."""
+
+    ready: bool
+    window_weeks: int
+    requirements: BaselineRequirements
+    easy_runs_used: int
+    easy_pace_s_per_km: BaselineSpread | None
+    easy_hr: BaselineSpread | None
+    easy_cadence: BaselineSpread | None
+    weekly_km: BaselineSpread | None
+    long_run_km: BaselineSpread | None
+    easy_share_pct: int | None
