@@ -77,18 +77,3 @@ conda activate runiq
 cp .env.example .env   # uncomment and fill the "outside Docker" values
 cd backend && alembic upgrade head
 ```
-
-## Data collection (current, temporary)
-
-There's no automated Garmin/Strava sync yet. Export your activity history
-from Garmin Connect as CSV and upload it via the **Upload Activities**
-page (`/activities/upload`) — the backend ingestion pipeline
-(`backend/app/ingestion/`) parses, validates, and normalizes it into
-Postgres. This is a deliberate placeholder: the ingestion functions are
-transport-agnostic, so a scheduled Garmin/Strava API sync can call the
-same functions later without changing them.
-
-## Project status
-
-Phase 0 (architecture scaffold) — see [`docs/roadmap.md`](./docs/roadmap.md)
-for the full phased plan.
